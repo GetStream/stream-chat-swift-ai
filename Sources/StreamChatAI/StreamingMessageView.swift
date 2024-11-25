@@ -1,17 +1,13 @@
 //
-//  StreamAITextView.swift
-//  StreamChatAI
-//
-//  Created by Martin Mitrevski on 23.10.24.
+// Copyright © 2024 Stream.io Inc. All rights reserved.
 //
 
 import Combine
-import StreamChat
 import SwiftUI
 internal import MarkdownUI
 internal import Splash
 
-public struct StreamAITextView: View {
+public struct StreamingMessageView: View {
     
     var content: String
     var isGenerating: Bool
@@ -155,7 +151,7 @@ public struct StreamAITextView: View {
     }
 }
 
-struct StreamAITextViewChangeListeners: ViewModifier {
+struct StreamingMessageViewChangeListeners: ViewModifier {
     
     @State var previousValue: String = ""
     
@@ -195,7 +191,7 @@ extension View {
         onIsGeneratingChange: @escaping (_ oldValue: Bool, _ newValue: Bool) -> Void
     ) -> some View {
         self.modifier(
-            StreamAITextViewChangeListeners(
+            StreamingMessageViewChangeListeners(
                 text: content,
                 isGenerating: isGenerating,
                 onContentChange: onContentChange,

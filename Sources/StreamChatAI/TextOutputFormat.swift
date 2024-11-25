@@ -1,8 +1,5 @@
 //
-//  TextOutputFormat.swift
-//  StreamChatAI
-//
-//  Created by Martin Mitrevski on 23.10.24.
+// Copyright © 2024 Stream.io Inc. All rights reserved.
 //
 
 internal import Splash
