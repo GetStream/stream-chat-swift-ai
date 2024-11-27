@@ -12,15 +12,22 @@ public struct StreamingMessageView: View {
     var content: String
     var isGenerating: Bool
     
+    private let letterInterval: TimeInterval
+    
     @State private var displayedText: String = ""
     @State private var characterQueue: [Character] = []
     @State private var typingTimer: Timer?
     @State private var chunkTimer: Timer?
     @State var queue = DispatchQueue(label: "com.streamai.textview")
     
-    public init(content: String, isGenerating: Bool) {
+    public init(
+        content: String,
+        isGenerating: Bool,
+        letterInterval: TimeInterval = 0.005
+    ) {
         self.content = content
         self.isGenerating = isGenerating
+        self.letterInterval = letterInterval
     }
     
     public var body: some View {
@@ -97,7 +104,7 @@ public struct StreamingMessageView: View {
     }
     
     func startTypingTimer() {
-        typingTimer = Timer.scheduledTimer(withTimeInterval: 0.005, repeats: true) { _ in
+        typingTimer = Timer.scheduledTimer(withTimeInterval: letterInterval, repeats: true) { _ in
             guard !self.characterQueue.isEmpty else { return }
             let nextCharacter = self.characterQueue.removeFirst()
             self.displayedText.append(nextCharacter)
