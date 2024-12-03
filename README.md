@@ -8,7 +8,7 @@ To start, this library includes the following components which assist with this 
 
 Our team plans to keep iterating and adding more components over time. If there's a component you use every day in your apps and would like to see added, please open an issue and we will try to add it 😎.
 
-### Installation
+## Installation
 
 The AI components are available via the Swift Package Manager (SPM). Use the following steps to add the SDK via SPM in Xcode:
 - Select "Add Packages…" in File menu
@@ -23,9 +23,9 @@ You can also add the components in your package file as a dependency:
 
 The components depend on John Sundell's [Splash](https://github.com/JohnSundell/Splash), as well as Guille Gonzalez's [Swift Markdown UI](https://github.com/gonzalezreal/swift-markdown-ui).
 
-### Usage
+## Usage
 
-#### Streaming Message View
+### Streaming Message View
 
 The `StreamingMessageView` is a component that can render markdown content efficiently. It has code syntax highlighting, supporting all the major languages. It can render most of the standard markdown content, such as tables, images, etc. 
 
@@ -42,7 +42,7 @@ StreamingMessageView(
 
 Additionally, you can specify the speed of the animation, with the `letterInterval` parameter. The default value is 0.005 (5ms).
 
-#### AI Typing Indicator View
+### AI Typing Indicator View
 
 The `AITypingIndicatorView` is used to present different states of the LLM, such as "Thinking", "Checking External Sources", etc. You can specify any text you need. There's also a nice animation when the indicator is shown.
 
@@ -51,6 +51,8 @@ AITypingIndicatorView(text: "Thinking")
 ```
 
 These components are designed to work seamlessly with our existing Swift UI [Chat SDK](https://getstream.io/tutorials/ios-chat/). Our [developer guide](https://getstream.io/chat/solutions/ai-integration/) explains how to get started building AI integrations with Stream and Swift UI. 
+
+<br />
 
 <a href="https://getstream.io?utm_source=Github&utm_medium=Github_Repo_Content&utm_content=Developer&utm_campaign=Github_Swift_AI_SDK&utm_term=DevRelOss">
 <img src="https://user-images.githubusercontent.com/24237865/138428440-b92e5fb7-89f8-41aa-96b1-71a5486c5849.png" align="right" width="12%"/>
