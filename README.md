@@ -8,7 +8,7 @@ To start, this library includes the following components which assist with this 
 
 Our team plans to keep iterating and adding more components over time. If there's a component you use every day in your apps and would like to see added, please open an issue and we will try to add it 😎.
 
-## Installation
+## 🛠️ Installation
 
 The AI components are available via the Swift Package Manager (SPM). Use the following steps to add the SDK via SPM in Xcode:
 - Select "Add Packages…" in File menu
@@ -23,7 +23,7 @@ You can also add the components in your package file as a dependency:
 
 The components depend on John Sundell's [Splash](https://github.com/JohnSundell/Splash), as well as Guille Gonzalez's [Swift Markdown UI](https://github.com/gonzalezreal/swift-markdown-ui).
 
-## Usage
+## ⚙️ Usage
 
 ### Streaming Message View
 
