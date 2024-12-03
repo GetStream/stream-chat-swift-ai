@@ -67,13 +67,13 @@ Stream provides UI components and state handling that make it easy to build real
 ## 📕 Tutorials
 
 To learn more about integrating AI and chatbots into your application, we recommend checking out the full list of tutorials across all of our supported frontend SDKs and providers. Stream's Chat SDK is natively supported across:
-* React
-* React Native
-* Angular
-* Jetpack Compose
-* Swift UI
-* Flutter
-* Javascript/Bring your own
+* [React](https://getstream.io/chat/react-chat/tutorial/)
+* [React Native](https://getstream.io/chat/react-native-chat/tutorial/)
+* [Angular](https://getstream.io/chat/angular/tutorial/)
+* [Jetpack Compose](https://getstream.io/tutorials/android-chat/)
+* [SwiftUI](https://getstream.io/tutorials/ios-chat/)
+* [Flutter](https://getstream.io/chat/flutter/tutorial/)
+* [Javascript/Bring your own](https://getstream.io/chat/docs/javascript/)
 
 
 ## 👩‍💻 Free for Makers 👨‍💻
