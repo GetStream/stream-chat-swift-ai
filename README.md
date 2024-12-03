@@ -1,4 +1,4 @@
-# Stream Chat AI UI for [Swift UI](https://getstream.io/tutorials/ios-chat/)
+# [Swift UI](https://getstream.io/tutorials/ios-chat/) AI components for Stream Chat
 
 This official repository for Stream Chat's UI components is designed specifically for AI-first applications written in Swift UI. When paired with our real-time [Chat API](https://getstream.io/chat/), it makes integrating with and rendering responses from LLM providers such as ChatGPT, Gemini, Anthropic or any custom backend easier by providing rich with out-of-the-box components able to render Markdown, Code blocks, tables, thinking indicators, images, etc.
 
