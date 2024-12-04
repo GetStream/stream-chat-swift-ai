@@ -17,7 +17,6 @@ public struct StreamingMessageView: View {
     @State private var displayedText: String = ""
     @State private var characterQueue: [Character] = []
     @State private var typingTimer: Timer?
-    @State private var chunkTimer: Timer?
     @State var queue = DispatchQueue(label: "com.streamai.textview")
     
     public init(
@@ -48,7 +47,6 @@ public struct StreamingMessageView: View {
           }
           .onDisappear {
               typingTimer?.invalidate()
-              chunkTimer?.invalidate()
           }
           .onChange(of: characterQueue, perform: { newValue in
               if characterQueue.isEmpty && !isGenerating {
@@ -80,8 +78,8 @@ public struct StreamingMessageView: View {
                             startTypingTimer()
                         }
                     } else if oldValue && !newValue {
-                        let newChunk = getNewChunk(oldText: displayedText, newText: content)
-                        self.characterQueue.append(contentsOf: newChunk)
+                        self.displayedText = content
+                        typingTimer?.invalidate()
                     }
                 }
             }
