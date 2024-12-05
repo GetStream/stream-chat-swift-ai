@@ -78,8 +78,9 @@ public struct StreamingMessageView: View {
                             startTypingTimer()
                         }
                     } else if oldValue && !newValue {
-                        self.displayedText = content
-                        typingTimer?.invalidate()
+                        let inQueue = String(characterQueue)
+                        let newChunk = getNewChunk(oldText: displayedText + inQueue, newText: content)
+                        self.characterQueue.append(contentsOf: newChunk)
                     }
                 }
             }
