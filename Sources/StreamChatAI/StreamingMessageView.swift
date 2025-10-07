@@ -19,6 +19,8 @@ public struct StreamingMessageView: View {
     @State private var typingTimer: Timer?
     @State var queue = DispatchQueue(label: "com.streamai.textview")
     
+    private let supportedChartLanguages = ["json", "chart", "chartjs", "echarts", "highcharts", "vega-lite", "vegalite"]
+    
     public init(
         content: String,
         isGenerating: Bool,
@@ -31,8 +33,24 @@ public struct StreamingMessageView: View {
     
     public var body: some View {
         Markdown(displayedText)
-          .markdownBlockStyle(\.codeBlock) {
-            codeBlock($0)
+          .markdownBlockStyle(\.codeBlock) { cfg in
+              if let language = cfg.language, supportedChartLanguages.contains(language.lowercased()) {
+                  if let data = cfg.content.data(using: .utf8),
+                    let spec = try? parseUSpec(from: data) {
+                      if #available(iOS 16.0, *) {
+                          USpecChartView(spec: spec)
+                      } else {
+                          // Fallback: render as a normal code block on older iOS
+                          codeBlock(cfg)
+                      }
+                  } else {
+                      // Not valid ChartSpec JSON, render as code block
+                      codeBlock(cfg)
+                  }
+              } else {
+                  // Non-JSON language, render as code block
+                  codeBlock(cfg)
+              }
           }
           .markdownCodeSyntaxHighlighter(.splash(theme: self.theme))
           .onAppear {
