@@ -48,6 +48,13 @@ public func parseUSpec(from jsonData: Data) throws -> USpec {
         if let pie = mapChartJSPieIfAny(j) { return pie }
         return mapChartJSGeneral(j)
     }
+    // 1b) Plotly (heatmap): single-spec and figure
+    if let p = try? JSONDecoder().decode(PlotlySingleSpec.self, from: jsonData), p.type.lowercased() == "heatmap" {
+        return mapPlotlySingleHeatmap(p)
+    }
+    if let fig = try? JSONDecoder().decode(PlotlyFigure.self, from: jsonData), let mapped = mapPlotlyFigure(fig) {
+        return mapped
+    }
     // 2) ECharts
     if let e = try? JSONDecoder().decode(EChartsSpec.self, from: jsonData) {
         return mapECharts(e)
@@ -149,7 +156,7 @@ private func mapChartJSPieIfAny(_ j: ChartJSSpec) -> USpec? {
 private func mapChartJSGeneral(_ j: ChartJSSpec) -> USpec {
     let type = j.type.lowercased()
     let begin0 = j.options?.scales?.y?.beginAtZero ?? false
-    
+
     let series: [USeries] = j.data.datasets.map { ds in
         if let labels = j.data.labels { // arrays aligned with labels
             var pts: [UPoint] = []
@@ -169,7 +176,7 @@ private func mapChartJSGeneral(_ j: ChartJSSpec) -> USpec {
             return USeries(name: ds.label ?? "Series", points: pts)
         }
     }
-    
+
     let kind: ChartKind = {
         switch type {
         case "line": return .line
@@ -182,7 +189,7 @@ private func mapChartJSGeneral(_ j: ChartJSSpec) -> USpec {
         default: return .line
         }
     }()
-    
+
     return USpec(title: j.title, kind: kind, beginAtZeroY: begin0, series: series)
 }
 
@@ -211,7 +218,7 @@ private struct EAxis: Decodable { let data: [String]?; let type: String? }
 private func mapECharts(_ e: EChartsSpec) -> USpec {
     let title = e.title?.text
     let categories = e.xAxis?.data
-    
+
     var allSeries: [USeries] = []
     for s in e.series {
         let name = s.name ?? "Series"
@@ -249,7 +256,7 @@ private func mapECharts(_ e: EChartsSpec) -> USpec {
         }
         allSeries.append(USeries(name: name, points: pts))
     }
-    
+
     // Guess kind by first series type
     let firstType = e.series.first?.type?.lowercased()
     let kind: ChartKind = {
@@ -261,7 +268,7 @@ private func mapECharts(_ e: EChartsSpec) -> USpec {
         default: return .line
         }
     }()
-    
+
     return USpec(title: title, kind: kind, series: allSeries)
 }
 
@@ -345,7 +352,7 @@ private func mapVegaLite(_ v: VegaLiteSpec) throws -> USpec {
     let yField = v.encoding.y?.field ?? "y"
     let colorField = v.encoding.color?.field
     let sizeField = v.encoding.size?.field
-    
+
     // Group by colorField into series
     var groups: [String: [UPoint]] = [:]
     for r in rows {
@@ -355,9 +362,9 @@ private func mapVegaLite(_ v: VegaLiteSpec) throws -> USpec {
         let sizeVal = sizeField.flatMap { r.raw[$0]?.double }
         groups[key, default: []].append(UPoint(x: xStr, y: yVal, size: sizeVal))
     }
-    
+
     let series = groups.map { USeries(name: $0.key, points: $0.value) }
-    
+
     // Determine kind from mark
     let kind: ChartKind = {
         if case let .str(s) = v.mark {
@@ -371,8 +378,70 @@ private func mapVegaLite(_ v: VegaLiteSpec) throws -> USpec {
             }
         } else { return .line }
     }()
-    
+
     return USpec(title: nil, kind: kind, series: series)
+}
+
+// ---------- Plotly (heatmap) ----------
+private struct PlotlyLayoutAxisTitle: Decodable {
+    let text: String?
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let s = try? c.decode(String.self) { text = s }
+        else if let obj = try? c.decode([String:String].self) { text = obj["text"] }
+        else { text = nil }
+    }
+}
+private struct PlotlyAxis: Decodable { let title: PlotlyLayoutAxisTitle? }
+private struct PlotlyLayout: Decodable { let title: PlotlyLayoutAxisTitle?; let xaxis: PlotlyAxis?; let yaxis: PlotlyAxis? }
+private struct PlotlyHeatmapDataSingle: Decodable { let z: [[Double]]; let x: [String]?; let y: [String]? }
+private struct PlotlySingleSpec: Decodable { let type: String; let data: PlotlyHeatmapDataSingle; let layout: PlotlyLayout? }
+private struct PlotlyTrace: Decodable { let type: String?; let z: [[Double]]?; let x: [String]?; let y: [String]?; let name: String? }
+private struct PlotlyFigure: Decodable { let data: [PlotlyTrace]; let layout: PlotlyLayout? }
+
+private func mapPlotlySingleHeatmap(_ p: PlotlySingleSpec) -> USpec {
+    let z = p.data.z
+    let xCats = p.data.x ?? (z.first?.indices.map { String($0) } ?? [])
+    let yCats = p.data.y ?? z.indices.map { String($0) }
+    var series: [USeries] = []
+    for (i, row) in z.enumerated() {
+        let yName = i < yCats.count ? yCats[i] : String(i)
+        var pts: [UPoint] = []
+        for (j, val) in row.enumerated() {
+            let xName = j < xCats.count ? xCats[j] : String(j)
+            pts.append(UPoint(x: xName, y: 0, z: val))
+        }
+        series.append(USeries(name: yName, points: pts))
+    }
+    return USpec(title: p.layout?.title?.text,
+                 kind: .heatmap,
+                 xLabel: p.layout?.xaxis?.title?.text,
+                 yLabel: p.layout?.yaxis?.title?.text,
+                 beginAtZeroY: false,
+                 series: series)
+}
+
+private func mapPlotlyFigure(_ f: PlotlyFigure) -> USpec? {
+    guard let trace = f.data.first(where: { ($0.type?.lowercased() == "heatmap") && $0.z != nil }) else { return nil }
+    let z = trace.z!
+    let xCats = trace.x ?? (z.first?.indices.map { String($0) } ?? [])
+    let yCats = trace.y ?? z.indices.map { String($0) }
+    var series: [USeries] = []
+    for (i, row) in z.enumerated() {
+        let yName = i < yCats.count ? yCats[i] : String(i)
+        var pts: [UPoint] = []
+        for (j, val) in row.enumerated() {
+            let xName = j < xCats.count ? xCats[j] : String(j)
+            pts.append(UPoint(x: xName, y: 0, z: val))
+        }
+        series.append(USeries(name: yName, points: pts))
+    }
+    return USpec(title: f.layout?.title?.text,
+                 kind: .heatmap,
+                 xLabel: f.layout?.xaxis?.title?.text,
+                 yLabel: f.layout?.yaxis?.title?.text,
+                 beginAtZeroY: false,
+                 series: series)
 }
 
 // ---------- AnyDecodable helper ----------
