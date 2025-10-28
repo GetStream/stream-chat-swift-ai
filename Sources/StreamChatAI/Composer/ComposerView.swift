@@ -39,29 +39,45 @@ public struct ComposerView: View {
             .background(Color(UIColor.secondarySystemBackground))
             .clipShape(.circle)
             
-            HStack {
-                TextField("Ask anything", text: $text, axis: .vertical)
-                    .lineLimit(1...5)
-                    .textFieldStyle(.plain)
-                
-                if text.isEmpty {
-                    TranscribeSpeechButton { newText in
-                        self.text = newText
+            VStack(spacing: 16) {
+                if !attachments.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(attachments, id: \.self) { url in
+                                SelectedAttachmentThumbnail(url: url) {
+                                    withAnimation {
+                                        removeAttachment(url)
+                                    }
+                                }
+                            }
+                        }
                     }
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.gray)
-                } else {
-                    Button {
-                        onMessageSend(.init(text: text, attachments: attachments))
-                        cleanupTemporaryAttachmentFiles(at: Array(temporaryAttachmentURLs))
-                        temporaryAttachmentURLs.removeAll()
-                        attachments.removeAll()
-                        selectedAssetURLs.removeAll()
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 22)
+                }
+                
+                HStack {
+                    TextField("Ask anything", text: $text, axis: .vertical)
+                        .lineLimit(1...5)
+                        .textFieldStyle(.plain)
+                    
+                    if text.isEmpty {
+                        TranscribeSpeechButton { newText in
+                            self.text = newText
+                        }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.gray)
+                    } else {
+                        Button {
+                            onMessageSend(.init(text: text, attachments: attachments))
+                            cleanupTemporaryAttachmentFiles(at: Array(temporaryAttachmentURLs))
+                            temporaryAttachmentURLs.removeAll()
+                            attachments.removeAll()
+                            selectedAssetURLs.removeAll()
+                        } label: {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 22)
+                        }
                     }
                 }
             }
@@ -79,6 +95,20 @@ public struct ComposerView: View {
             )
                 .presentationDetents([.medium, .large])
         }
+    }
+    
+    @MainActor
+    private func removeAttachment(_ url: URL) {
+        if let assetEntry = selectedAssetURLs.first(where: { $0.value == url }) {
+            selectedAssetURLs.removeValue(forKey: assetEntry.key)
+        }
+        
+        if temporaryAttachmentURLs.contains(url) {
+            cleanupTemporaryAttachmentFiles(at: [url])
+            temporaryAttachmentURLs.remove(url)
+        }
+        
+        attachments.removeAll(where: { $0 == url })
     }
 }
 
@@ -152,7 +182,7 @@ struct ComposerPickerView: View {
             Task {
                 for item in newItems {
                     if let identifier = item.itemIdentifier,
-                       let asset = await photoLibrary.asset(for: identifier),
+                       let asset = photoLibrary.asset(for: identifier),
                        let url = await photoLibrary.fileURL(for: asset) {
                         await MainActor.run {
                             appendAttachment(.init(url: url, isTemporary: false))
@@ -319,6 +349,78 @@ private struct RecentPhotoThumbnail: View {
                 didFail = false
             }
         }
+    }
+}
+
+@available(iOS 16, *)
+private struct SelectedAttachmentThumbnail: View {
+    let url: URL
+    let onRemove: () -> Void
+    
+    @State private var image: UIImage?
+    @State private var didFail = false
+    
+    var body: some View {
+        AttachmentTile {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 100, height: 100)
+                    .allowsHitTesting(false)
+                    .clipped()
+            } else if didFail {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            } else {
+                ProgressView()
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            Button(action: onRemove) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.9))
+                        .shadow(radius: 1)
+                    Circle()
+                        .fill(Color.black.opacity(0.7))
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+            .padding(6)
+        }
+        .task {
+            guard image == nil else { return }
+            if let loaded = await loadImage() {
+                await MainActor.run {
+                    image = loaded
+                    didFail = false
+                }
+            } else {
+                await MainActor.run {
+                    didFail = true
+                }
+            }
+        }
+    }
+    
+    private func loadImage() async -> UIImage? {
+        await Task.detached(priority: .userInitiated) {
+            let shouldStopAccessing = url.startAccessingSecurityScopedResource()
+            defer {
+                if shouldStopAccessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+            
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return UIImage(data: data)
+        }.value
     }
 }
 
