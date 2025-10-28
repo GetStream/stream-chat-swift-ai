@@ -5,7 +5,10 @@
 //  Created by Martin Mitrevski on 24.10.25.
 //
 
+import Photos
+import PhotosUI
 import SwiftUI
+import UIKit
 
 @available(iOS 16, *)
 public struct ComposerView: View {
@@ -14,6 +17,8 @@ public struct ComposerView: View {
     var onMessageSend: (MessageData) -> Void
     
     @State private var sheetShown = false
+    @State private var attachments: [Data] = []
+    @State private var selectedAssetData: [String: Data] = [:]
     
     public init(text: Binding<String>, onMessageSend: @escaping (MessageData) -> Void) {
         _text = text
@@ -46,7 +51,9 @@ public struct ComposerView: View {
                     .foregroundStyle(.gray)
                 } else {
                     Button {
-                        onMessageSend(.init(text: text))
+                        onMessageSend(.init(text: text, attachments: attachments))
+                        attachments.removeAll()
+                        selectedAssetData.removeAll()
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .resizable()
@@ -62,7 +69,10 @@ public struct ComposerView: View {
         .padding(.all, 8)
         .foregroundStyle(.primary)
         .sheet(isPresented: $sheetShown) {
-            ComposerPickerView()
+            ComposerPickerView(
+                attachments: $attachments,
+                selectedAssetData: $selectedAssetData
+            )
                 .presentationDetents([.medium, .large])
         }
     }
@@ -70,41 +80,304 @@ public struct ComposerView: View {
 
 @available(iOS 16, *)
 struct ComposerPickerView: View {
+    @Binding var attachments: [Data]
+    @Binding var selectedAssetData: [String: Data]
+    
+    @StateObject private var photoLibrary = PhotoLibraryService()
+    @State private var allPhotosSelection: [PhotosPickerItem] = []
+    @State private var cameraPresented = false
+    
     var body: some View {
-        VStack {
+        VStack(spacing: 16) {
             HStack {
                 Spacer()
-                Button {
-                    
-                } label: {
+                PhotosPicker(
+                    selection: $allPhotosSelection,
+                    maxSelectionCount: 10,
+                    matching: .images
+                ) {
                     Text("All Photos")
-                        .padding()
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(Color(UIColor.secondarySystemBackground))
+                        .clipShape(Capsule())
                 }
+                .padding()
             }
-            ScrollView(.horizontal) {
-                HStack {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
                     Button {
-                        
+                        cameraPresented = true
                     } label: {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color(UIColor.lightGray).opacity(0.3))
-                            
+                        AttachmentTile {
                             Image(systemName: "camera")
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.black)
                         }
-                        .frame(width: 100, height: 100)
+                    }
+                    .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
+                    
+                    ForEach(photoLibrary.recentAssets, id: \.localIdentifier) { asset in
+                        RecentPhotoThumbnail(
+                            asset: asset,
+                            service: photoLibrary,
+                            isSelected: selectedAssetData[asset.localIdentifier] != nil
+                        ) { change in
+                            switch change {
+                            case .select(let data):
+                                selectAsset(assetID: asset.localIdentifier, data: data)
+                            case .deselect:
+                                deselectAsset(assetID: asset.localIdentifier)
+                            case .failed:
+                                deselectAsset(assetID: asset.localIdentifier)
+                            }
+                        }
                     }
                 }
-                .padding()
+                .padding(.horizontal)
             }
             Spacer()
+        }
+        .task {
+            await photoLibrary.prepare(limit: 10)
+        }
+        .onChange(of: allPhotosSelection) { newItems in
+            guard !newItems.isEmpty else { return }
+            
+            Task {
+                for item in newItems {
+                    if let data = try? await item.loadTransferable(type: Data.self) {
+                        await MainActor.run {
+                            attachments.append(data)
+                        }
+                    }
+                }
+                
+                await MainActor.run {
+                    allPhotosSelection = []
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $cameraPresented) {
+            CameraPicker(isPresented: $cameraPresented) { data in
+                attachments.append(data)
+            }
+        }
+        .onChange(of: attachments) { newValue in
+            if newValue.isEmpty, !selectedAssetData.isEmpty {
+                selectedAssetData.removeAll()
+            }
+        }
+    }
+    
+    @MainActor
+    private func selectAsset(assetID: String, data: Data) {
+        guard selectedAssetData[assetID] == nil else { return }
+        selectedAssetData[assetID] = data
+        attachments.append(data)
+    }
+    
+    @MainActor
+    private func deselectAsset(assetID: String) {
+        guard let removed = selectedAssetData.removeValue(forKey: assetID) else { return }
+        if let index = attachments.firstIndex(of: removed) {
+            attachments.remove(at: index)
+        }
+    }
+}
+
+@available(iOS 16, *)
+private struct RecentPhotoThumbnail: View {
+    enum SelectionChange {
+        case select(Data)
+        case deselect
+        case failed
+    }
+    
+    let asset: PHAsset
+    @ObservedObject var service: PhotoLibraryService
+    let isSelected: Bool
+    let onSelectionChange: (SelectionChange) -> Void
+    
+    @State private var image: UIImage?
+    @State private var didFail = false
+    @State private var isFetchingAttachment = false
+    
+    var body: some View {
+        Button {
+            Task {
+                if isSelected {
+                    await MainActor.run {
+                        didFail = false
+                        onSelectionChange(.deselect)
+                    }
+                    return
+                }
+                
+                guard !isFetchingAttachment else { return }
+                await MainActor.run {
+                    didFail = false
+                    isFetchingAttachment = true
+                }
+                
+                let data = await service.data(for: asset)
+                await MainActor.run {
+                    isFetchingAttachment = false
+                    if let data {
+                        didFail = false
+                        onSelectionChange(.select(data))
+                    } else {
+                        didFail = true
+                        onSelectionChange(.failed)
+                    }
+                }
+            }
+        } label: {
+            AttachmentTile {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 100, height: 100)
+                        .allowsHitTesting(false)
+                        .clipped()
+                } else if didFail {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ProgressView()
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                SelectionBadge(isSelected: isSelected)
+                    .padding(6)
+            }
+        }
+        .disabled(isFetchingAttachment)
+        .task {
+            guard image == nil else { return }
+            let scale = UIScreen.main.scale
+            let size = CGSize(width: 100 * scale, height: 100 * scale)
+            if let thumbnail = await service.thumbnail(for: asset, targetSize: size) {
+                await MainActor.run {
+                    image = thumbnail
+                    didFail = false
+                }
+            } else {
+                await MainActor.run {
+                    didFail = true
+                }
+            }
+        }
+        .onChange(of: isSelected) { selected in
+            if !selected {
+                didFail = false
+            }
+        }
+    }
+}
+
+@available(iOS 16, *)
+private struct AttachmentTile<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+    
+    var body: some View {
+        RoundedRectangle(cornerRadius: 16)
+            .fill(Color(UIColor.lightGray).opacity(0.3))
+            .overlay {
+                content()
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+            }
+        .frame(width: 100, height: 100)
+        .contentShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+@available(iOS 16, *)
+private struct SelectionBadge: View {
+    let isSelected: Bool
+    
+    var body: some View {
+        ZStack {
+            if isSelected {
+                Circle()
+                    .fill(Color.white.opacity(0.9))
+                    .shadow(radius: 1)
+                Circle()
+                    .fill(Color.accentColor)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+            } else {
+                Circle()
+                    .stroke(Color.white, lineWidth: 2)
+                    .frame(width: 16, height: 16)
+            }
+        }
+        .frame(width: 20, height: 20)
+    }
+}
+
+@available(iOS 16, *)
+private struct CameraPicker: UIViewControllerRepresentable {
+    @Binding var isPresented: Bool
+    let onCapture: (Data) -> Void
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let controller = UIImagePickerController()
+        controller.delegate = context.coordinator
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            controller.sourceType = .camera
+        }
+        controller.allowsEditing = false
+        return controller
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        private let parent: CameraPicker
+        
+        init(parent: CameraPicker) {
+            self.parent = parent
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            dismiss()
+        }
+        
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            defer { dismiss() }
+            
+            let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage)
+            guard let image, let data = image.jpegData(compressionQuality: 0.9) else { return }
+            DispatchQueue.main.async {
+                self.parent.onCapture(data)
+            }
+        }
+        
+        private func dismiss() {
+            DispatchQueue.main.async {
+                self.parent.isPresented = false
+            }
         }
     }
 }
 
 public struct MessageData {
     public let text: String
-//    let attachments: [Attachment] //TODO:
+    public let attachments: [Data]
+    
+    public init(text: String, attachments: [Data] = []) {
+        self.text = text
+        self.attachments = attachments
+    }
 }
