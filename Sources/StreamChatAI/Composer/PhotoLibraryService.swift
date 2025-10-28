@@ -35,6 +35,11 @@ final class PhotoLibraryService: ObservableObject {
         recentAssets = assets
     }
     
+    func asset(for identifier: String) -> PHAsset? {
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
+        return fetchResult.firstObject
+    }
+    
     func data(for asset: PHAsset) async -> Data? {
         await withCheckedContinuation { continuation in
             let options = PHImageRequestOptions()
@@ -83,6 +88,18 @@ final class PhotoLibraryService: ObservableObject {
                 if fallbackRequested { return }
                 fallbackRequested = true
                 self.fetchFullSizeData(for: asset, resume: resume)
+            }
+        }
+    }
+    
+    func fileURL(for asset: PHAsset) async -> URL? {
+        await withCheckedContinuation { continuation in
+            let options = PHContentEditingInputRequestOptions()
+            options.isNetworkAccessAllowed = true
+            options.canHandleAdjustmentData = { _ in true }
+            
+            asset.requestContentEditingInput(with: options) { input, _ in
+                continuation.resume(returning: input?.fullSizeImageURL)
             }
         }
     }

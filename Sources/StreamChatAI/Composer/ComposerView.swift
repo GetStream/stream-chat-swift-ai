@@ -17,8 +17,9 @@ public struct ComposerView: View {
     var onMessageSend: (MessageData) -> Void
     
     @State private var sheetShown = false
-    @State private var attachments: [Data] = []
-    @State private var selectedAssetData: [String: Data] = [:]
+    @State private var attachments: [URL] = []
+    @State private var selectedAssetURLs: [String: URL] = [:]
+    @State private var temporaryAttachmentURLs: Set<URL> = []
     
     public init(text: Binding<String>, onMessageSend: @escaping (MessageData) -> Void) {
         _text = text
@@ -52,8 +53,10 @@ public struct ComposerView: View {
                 } else {
                     Button {
                         onMessageSend(.init(text: text, attachments: attachments))
+                        cleanupTemporaryAttachmentFiles(at: Array(temporaryAttachmentURLs))
+                        temporaryAttachmentURLs.removeAll()
                         attachments.removeAll()
-                        selectedAssetData.removeAll()
+                        selectedAssetURLs.removeAll()
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .resizable()
@@ -71,7 +74,8 @@ public struct ComposerView: View {
         .sheet(isPresented: $sheetShown) {
             ComposerPickerView(
                 attachments: $attachments,
-                selectedAssetData: $selectedAssetData
+                selectedAssetURLs: $selectedAssetURLs,
+                temporaryAttachmentURLs: $temporaryAttachmentURLs
             )
                 .presentationDetents([.medium, .large])
         }
@@ -80,8 +84,9 @@ public struct ComposerView: View {
 
 @available(iOS 16, *)
 struct ComposerPickerView: View {
-    @Binding var attachments: [Data]
-    @Binding var selectedAssetData: [String: Data]
+    @Binding var attachments: [URL]
+    @Binding var selectedAssetURLs: [String: URL]
+    @Binding var temporaryAttachmentURLs: Set<URL>
     
     @StateObject private var photoLibrary = PhotoLibraryService()
     @State private var allPhotosSelection: [PhotosPickerItem] = []
@@ -121,11 +126,11 @@ struct ComposerPickerView: View {
                         RecentPhotoThumbnail(
                             asset: asset,
                             service: photoLibrary,
-                            isSelected: selectedAssetData[asset.localIdentifier] != nil
+                            isSelected: selectedAssetURLs[asset.localIdentifier] != nil
                         ) { change in
                             switch change {
-                            case .select(let data):
-                                selectAsset(assetID: asset.localIdentifier, data: data)
+                            case .select(let attachment):
+                                selectAsset(assetID: asset.localIdentifier, attachment: attachment)
                             case .deselect:
                                 deselectAsset(assetID: asset.localIdentifier)
                             case .failed:
@@ -146,9 +151,26 @@ struct ComposerPickerView: View {
             
             Task {
                 for item in newItems {
-                    if let data = try? await item.loadTransferable(type: Data.self) {
+                    if let identifier = item.itemIdentifier,
+                       let asset = await photoLibrary.asset(for: identifier),
+                       let url = await photoLibrary.fileURL(for: asset) {
                         await MainActor.run {
-                            attachments.append(data)
+                            appendAttachment(.init(url: url, isTemporary: false))
+                        }
+                        continue
+                    }
+                    
+                    if let url = try? await item.loadTransferable(type: URL.self) {
+                        await MainActor.run {
+                            appendAttachment(.init(url: url, isTemporary: false))
+                        }
+                        continue
+                    }
+                    
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let tempURL = writeAttachmentDataToTemporaryURL(data) {
+                        await MainActor.run {
+                            appendAttachment(.init(url: tempURL, isTemporary: true))
                         }
                     }
                 }
@@ -159,29 +181,45 @@ struct ComposerPickerView: View {
             }
         }
         .fullScreenCover(isPresented: $cameraPresented) {
-            CameraPicker(isPresented: $cameraPresented) { data in
-                attachments.append(data)
+            CameraPicker(isPresented: $cameraPresented) { result in
+                appendAttachment(result)
             }
         }
         .onChange(of: attachments) { newValue in
-            if newValue.isEmpty, !selectedAssetData.isEmpty {
-                selectedAssetData.removeAll()
+            if newValue.isEmpty {
+                selectedAssetURLs.removeAll()
+                cleanupTemporaryAttachmentFiles(at: Array(temporaryAttachmentURLs))
+                temporaryAttachmentURLs.removeAll()
             }
         }
     }
     
     @MainActor
-    private func selectAsset(assetID: String, data: Data) {
-        guard selectedAssetData[assetID] == nil else { return }
-        selectedAssetData[assetID] = data
-        attachments.append(data)
+    private func selectAsset(assetID: String, attachment: AttachmentLocation) {
+        guard selectedAssetURLs[assetID] == nil else { return }
+        selectedAssetURLs[assetID] = attachment.url
+        appendAttachment(attachment)
     }
     
     @MainActor
     private func deselectAsset(assetID: String) {
-        guard let removed = selectedAssetData.removeValue(forKey: assetID) else { return }
+        guard let removed = selectedAssetURLs.removeValue(forKey: assetID) else { return }
+        if temporaryAttachmentURLs.contains(removed) {
+            cleanupTemporaryAttachmentFiles(at: [removed])
+            temporaryAttachmentURLs.remove(removed)
+        }
         if let index = attachments.firstIndex(of: removed) {
             attachments.remove(at: index)
+        }
+    }
+    
+    @MainActor
+    private func appendAttachment(_ attachment: AttachmentLocation) {
+        attachments.append(attachment.url)
+        if attachment.isTemporary {
+            temporaryAttachmentURLs.insert(attachment.url)
+        } else {
+            temporaryAttachmentURLs.remove(attachment.url)
         }
     }
 }
@@ -189,7 +227,7 @@ struct ComposerPickerView: View {
 @available(iOS 16, *)
 private struct RecentPhotoThumbnail: View {
     enum SelectionChange {
-        case select(Data)
+        case select(AttachmentLocation)
         case deselect
         case failed
     }
@@ -220,12 +258,18 @@ private struct RecentPhotoThumbnail: View {
                     isFetchingAttachment = true
                 }
                 
-                let data = await service.data(for: asset)
+                var attachment: AttachmentLocation?
+                if let url = await service.fileURL(for: asset) {
+                    attachment = .init(url: url, isTemporary: false)
+                } else if let data = await service.data(for: asset),
+                          let tempURL = writeAttachmentDataToTemporaryURL(data) {
+                    attachment = .init(url: tempURL, isTemporary: true)
+                }
                 await MainActor.run {
                     isFetchingAttachment = false
-                    if let data {
+                    if let attachment {
                         didFail = false
-                        onSelectionChange(.select(data))
+                        onSelectionChange(.select(attachment))
                     } else {
                         didFail = true
                         onSelectionChange(.failed)
@@ -322,7 +366,7 @@ private struct SelectionBadge: View {
 @available(iOS 16, *)
 private struct CameraPicker: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
-    let onCapture: (Data) -> Void
+    let onCapture: (AttachmentLocation) -> Void
     
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -340,7 +384,7 @@ private struct CameraPicker: UIViewControllerRepresentable {
     
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
     
-    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
         private let parent: CameraPicker
         
         init(parent: CameraPicker) {
@@ -357,10 +401,18 @@ private struct CameraPicker: UIViewControllerRepresentable {
         ) {
             defer { dismiss() }
             
+            if let imageURL = info[.imageURL] as? URL {
+                DispatchQueue.main.async {
+                    self.parent.onCapture(.init(url: imageURL, isTemporary: false))
+                }
+                return
+            }
+            
             let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage)
             guard let image, let data = image.jpegData(compressionQuality: 0.9) else { return }
+            guard let url = writeAttachmentDataToTemporaryURL(data) else { return }
             DispatchQueue.main.async {
-                self.parent.onCapture(data)
+                self.parent.onCapture(.init(url: url, isTemporary: true))
             }
         }
         
@@ -372,11 +424,58 @@ private struct CameraPicker: UIViewControllerRepresentable {
     }
 }
 
+private struct AttachmentLocation {
+    let url: URL
+    let isTemporary: Bool
+}
+
+private func writeAttachmentDataToTemporaryURL(_ data: Data) -> URL? {
+    let fileManager = FileManager.default
+    let fileURL = fileManager.temporaryDirectory.appendingPathComponent(
+        "streamchat-attachment-\(UUID().uuidString).jpg"
+    )
+    
+    let dataToWrite: Data
+    if data.starts(with: [0xFF, 0xD8]) {
+        dataToWrite = data
+    } else if let image = UIImage(data: data),
+              let jpegData = image.jpegData(compressionQuality: 0.9) {
+        dataToWrite = jpegData
+    } else {
+        return nil
+    }
+    
+    do {
+        try dataToWrite.write(to: fileURL, options: [.atomic])
+        return fileURL
+    } catch {
+        print("ComposerView attachment write error: \(error.localizedDescription)")
+        return nil
+    }
+}
+
+private func cleanupTemporaryAttachmentFiles(at urls: [URL]) {
+    let fileManager = FileManager.default
+    let uniqueURLs = Set(urls.filter { $0.isFileURL })
+    
+    for url in uniqueURLs {
+        do {
+            try fileManager.removeItem(at: url)
+        } catch let error as NSError {
+            if error.domain == NSCocoaErrorDomain,
+               error.code == NSFileNoSuchFileError {
+                continue
+            }
+            print("ComposerView attachment cleanup error: \(error.localizedDescription)")
+        }
+    }
+}
+
 public struct MessageData {
     public let text: String
-    public let attachments: [Data]
+    public let attachments: [URL]
     
-    public init(text: String, attachments: [Data] = []) {
+    public init(text: String, attachments: [URL] = []) {
         self.text = text
         self.attachments = attachments
     }
