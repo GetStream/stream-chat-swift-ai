@@ -1,8 +1,5 @@
 //
-//  ComposerView.swift
-//  StreamChatAI
-//
-//  Created by Martin Mitrevski on 24.10.25.
+// Copyright © 2024 Stream.io Inc. All rights reserved.
 //
 
 import Photos
