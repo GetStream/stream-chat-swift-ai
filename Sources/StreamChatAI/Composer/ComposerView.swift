@@ -18,8 +18,17 @@ public struct ComposerView: View {
     @State private var selectedAssetURLs: [String: URL] = [:]
     @State private var temporaryAttachmentURLs: Set<URL> = []
     
-    public init(text: Binding<String>, onMessageSend: @escaping (MessageData) -> Void) {
+    @FocusState var isFocused: Bool
+    
+    @Binding var isTextFieldFocused: Bool
+    
+    public init(
+        text: Binding<String>,
+        isTextFieldFocused: Binding<Bool>? = nil,
+        onMessageSend: @escaping (MessageData) -> Void
+    ) {
         _text = text
+        _isTextFieldFocused = isTextFieldFocused ?? .constant(false)
         self.onMessageSend = onMessageSend
     }
     
@@ -55,6 +64,7 @@ public struct ComposerView: View {
                     TextField("Ask anything", text: $text, axis: .vertical)
                         .lineLimit(1...5)
                         .textFieldStyle(.plain)
+                        .focused($isFocused)
                     
                     if text.isEmpty {
                         TranscribeSpeechButton { newText in
@@ -91,6 +101,14 @@ public struct ComposerView: View {
                 temporaryAttachmentURLs: $temporaryAttachmentURLs
             )
                 .presentationDetents([.medium, .large])
+        }
+        .onAppear {
+            if isTextFieldFocused {
+                isFocused = true
+            }
+        }
+        .onChange(of: isTextFieldFocused) { newValue in
+            isFocused = isTextFieldFocused
         }
     }
     
