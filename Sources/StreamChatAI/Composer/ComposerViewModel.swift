@@ -22,7 +22,7 @@ public class ComposerViewModel: ObservableObject {
     @Published public var temporaryAttachmentURLs: Set<URL> = []
     @Published public var selectedChatOption: ChatOption?
     @Published public var isTextFieldFocused: Bool
-    public let chatOptions: [ChatOption]
+    @Published public var chatOptions: [ChatOption]
 
     public init(
         text: String = "",
@@ -62,6 +62,7 @@ public class ComposerViewModel: ObservableObject {
         temporaryAttachmentURLs.removeAll()
         attachments.removeAll()
         selectedAssetURLs.removeAll()
+        text = ""
     }
     
     public func selectAsset(assetID: String, attachment: AttachmentLocation) {

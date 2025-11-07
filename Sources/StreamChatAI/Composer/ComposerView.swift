@@ -54,26 +54,25 @@ public struct ComposerView: View {
                 
                 if let selectedChatOption = viewModel.selectedChatOption {
                     HStack {
-                        Image(systemName: selectedChatOption.icon)
-                        VStack(alignment: .leading) {
-                            Text(selectedChatOption.title)
+                        HStack {
+                            Image(systemName: selectedChatOption.icon)
+                            Text(selectedChatOption.shortTitle)
                                 .font(.headline)
-                            Text(selectedChatOption.description)
-                                .font(.subheadline)
-                        }
-                        Button {
-                            withAnimation {
-                                viewModel.selectedChatOption = nil
+                            Button {
+                                withAnimation {
+                                    viewModel.selectedChatOption = nil
+                                }
+                            } label: {
+                                Image(systemName: "xmark")
                             }
-                        } label: {
-                            Image(systemName: "xmark")
                         }
+                        .foregroundStyle(.blue)
+                        .padding(.all, 8)
+                        .background(Color(UIColor.systemBackground))
+                        .cornerRadius(16)
+                        
+                        Spacer()
                     }
-                    .foregroundStyle(.blue)
-                    .padding(.all, 8)
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .cornerRadius(16)
-                    .padding(.all, 8)
                 }
                 
                 HStack {
@@ -133,6 +132,7 @@ public struct ChatOption: Identifiable, Equatable {
     public let title: String
     public let description: String
     public let icon: String
+    public let shortTitle: String
     public var customData: [String: Any]? = nil
     public var action: () -> Void
 
@@ -145,8 +145,9 @@ public struct ChatOption: Identifiable, Equatable {
         title: String,
         description: String,
         icon: String,
+        shortTitle: String,
         customData: [String : Any]? = nil,
-        action: @escaping () -> Void
+        action: @escaping () -> Void = {}
     ) {
         self.id = id
         self.title = title
@@ -154,6 +155,7 @@ public struct ChatOption: Identifiable, Equatable {
         self.icon = icon
         self.customData = customData
         self.action = action
+        self.shortTitle = shortTitle
     }
 }
 
