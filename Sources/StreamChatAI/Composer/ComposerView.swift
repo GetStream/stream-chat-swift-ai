@@ -9,33 +9,25 @@ import UIKit
 
 @available(iOS 16, *)
 public struct ComposerView: View {
-    @Binding var text: String
+
+    @StateObject var viewModel: ComposerViewModel
     
     var onMessageSend: (MessageData) -> Void
     
-    @State private var sheetShown = false
-    @State private var attachments: [URL] = []
-    @State private var selectedAssetURLs: [String: URL] = [:]
-    @State private var temporaryAttachmentURLs: Set<URL> = []
-    
     @FocusState var isFocused: Bool
     
-    @Binding var isTextFieldFocused: Bool
-    
     public init(
-        text: Binding<String>,
-        isTextFieldFocused: Binding<Bool>? = nil,
+        viewModel: ComposerViewModel? = nil,
         onMessageSend: @escaping (MessageData) -> Void
     ) {
-        _text = text
-        _isTextFieldFocused = isTextFieldFocused ?? .constant(false)
+        _viewModel = StateObject(wrappedValue: viewModel ?? ComposerViewModel())
         self.onMessageSend = onMessageSend
     }
     
     public var body: some View {
         HStack {
             Button {
-                sheetShown = true
+                viewModel.sheetShown = true
             } label: {
                 Image(systemName: "plus")
                     .foregroundStyle(.gray)
@@ -46,13 +38,13 @@ public struct ComposerView: View {
             .clipShape(.circle)
             
             VStack(spacing: 16) {
-                if !attachments.isEmpty {
+                if !viewModel.attachments.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(attachments, id: \.self) { url in
+                            ForEach(viewModel.attachments, id: \.self) { url in
                                 SelectedAttachmentThumbnail(url: url) {
                                     withAnimation {
-                                        removeAttachment(url)
+                                        viewModel.removeAttachment(url)
                                     }
                                 }
                             }
@@ -60,25 +52,46 @@ public struct ComposerView: View {
                     }
                 }
                 
+                if let selectedChatOption = viewModel.selectedChatOption {
+                    HStack {
+                        Image(systemName: selectedChatOption.icon)
+                        VStack(alignment: .leading) {
+                            Text(selectedChatOption.title)
+                                .font(.headline)
+                            Text(selectedChatOption.description)
+                                .font(.subheadline)
+                        }
+                        Button {
+                            withAnimation {
+                                viewModel.selectedChatOption = nil
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                    }
+                    .foregroundStyle(.blue)
+                    .padding(.all, 8)
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .cornerRadius(16)
+                    .padding(.all, 8)
+                }
+                
                 HStack {
-                    TextField("Ask anything", text: $text, axis: .vertical)
+                    TextField("Ask anything", text: $viewModel.text, axis: .vertical)
                         .lineLimit(1...5)
                         .textFieldStyle(.plain)
                         .focused($isFocused)
                     
                     if text.isEmpty {
                         TranscribeSpeechButton { newText in
-                            self.text = newText
+                            viewModel.text = newText
                         }
                         .fontWeight(.semibold)
                         .foregroundStyle(.gray)
                     } else {
                         Button {
-                            onMessageSend(.init(text: text, attachments: attachments))
-                            cleanupTemporaryAttachmentFiles(at: Array(temporaryAttachmentURLs))
-                            temporaryAttachmentURLs.removeAll()
-                            attachments.removeAll()
-                            selectedAssetURLs.removeAll()
+                            onMessageSend(.init(text: text, attachments: viewModel.attachments, chatOption: viewModel.selectedChatOption))
+                            viewModel.cleanUpData()
                         } label: {
                             Image(systemName: "arrow.up.circle.fill")
                                 .resizable()
@@ -94,49 +107,64 @@ public struct ComposerView: View {
         }
         .padding(.all, 8)
         .foregroundStyle(.primary)
-        .sheet(isPresented: $sheetShown) {
+        .sheet(isPresented: $viewModel.sheetShown) {
             ComposerPickerView(
-                attachments: $attachments,
-                selectedAssetURLs: $selectedAssetURLs,
-                temporaryAttachmentURLs: $temporaryAttachmentURLs
+                viewModel: viewModel
             )
                 .presentationDetents([.medium, .large])
         }
         .onAppear {
-            if isTextFieldFocused {
+            if viewModel.isTextFieldFocused {
                 isFocused = true
             }
         }
-        .onChange(of: isTextFieldFocused) { newValue in
-            isFocused = isTextFieldFocused
+        .onChange(of: viewModel.isTextFieldFocused) { newValue in
+            isFocused = viewModel.isTextFieldFocused
         }
     }
     
-    @MainActor
-    private func removeAttachment(_ url: URL) {
-        if let assetEntry = selectedAssetURLs.first(where: { $0.value == url }) {
-            selectedAssetURLs.removeValue(forKey: assetEntry.key)
-        }
-        
-        if temporaryAttachmentURLs.contains(url) {
-            cleanupTemporaryAttachmentFiles(at: [url])
-            temporaryAttachmentURLs.remove(url)
-        }
-        
-        attachments.removeAll(where: { $0 == url })
+    var text: String {
+        viewModel.text
+    }
+}
+
+public struct ChatOption: Identifiable, Equatable {
+    public let id: String
+    public let title: String
+    public let description: String
+    public let icon: String
+    public var customData: [String: Any]? = nil
+    public var action: () -> Void
+
+    public static func ==(lhs: ChatOption, rhs: ChatOption) -> Bool {
+        rhs.id == rhs.id
+    }
+    
+    public init(
+        id: String,
+        title: String,
+        description: String,
+        icon: String,
+        customData: [String : Any]? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.icon = icon
+        self.customData = customData
+        self.action = action
     }
 }
 
 @available(iOS 16, *)
 struct ComposerPickerView: View {
-    @Binding var attachments: [URL]
-    @Binding var selectedAssetURLs: [String: URL]
-    @Binding var temporaryAttachmentURLs: Set<URL>
+    @ObservedObject var viewModel: ComposerViewModel
     
     @StateObject private var photoLibrary = PhotoLibraryService()
     @State private var allPhotosSelection: [PhotosPickerItem] = []
     @State private var cameraPresented = false
-    
+        
     var body: some View {
         VStack(spacing: 16) {
             HStack {
@@ -171,15 +199,15 @@ struct ComposerPickerView: View {
                         RecentPhotoThumbnail(
                             asset: asset,
                             service: photoLibrary,
-                            isSelected: selectedAssetURLs[asset.localIdentifier] != nil
+                            isSelected: viewModel.selectedAssetURLs[asset.localIdentifier] != nil
                         ) { change in
                             switch change {
                             case .select(let attachment):
-                                selectAsset(assetID: asset.localIdentifier, attachment: attachment)
+                                viewModel.selectAsset(assetID: asset.localIdentifier, attachment: attachment)
                             case .deselect:
-                                deselectAsset(assetID: asset.localIdentifier)
+                                viewModel.deselectAsset(assetID: asset.localIdentifier)
                             case .failed:
-                                deselectAsset(assetID: asset.localIdentifier)
+                                viewModel.deselectAsset(assetID: asset.localIdentifier)
                             }
                         }
                     }
@@ -187,6 +215,37 @@ struct ComposerPickerView: View {
                 .padding(.horizontal)
             }
             Spacer()
+            if !viewModel.chatOptions.isEmpty {
+                Divider()
+                
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 16) {
+                        ForEach(viewModel.chatOptions) { option in
+                            Button {
+                                withAnimation {
+                                    option.action()
+                                }
+                            } label: {
+                                HStack(spacing: 16) {
+                                    Image(systemName: option.icon)
+
+                                    VStack(alignment: .leading) {
+                                        Text(option.title)
+                                            .font(.headline)
+
+                                        Text(option.description)
+                                            .font(.subheadline)
+                                            .foregroundStyle(.gray)
+                                    }
+                                    Spacer()
+                                }
+                                .foregroundStyle(.black)
+                            }
+                        }
+                    }
+                    .padding()
+                }
+            }
         }
         .task {
             await photoLibrary.prepare(limit: 10)
@@ -200,14 +259,14 @@ struct ComposerPickerView: View {
                        let asset = photoLibrary.asset(for: identifier),
                        let url = await photoLibrary.fileURL(for: asset) {
                         await MainActor.run {
-                            appendAttachment(.init(url: url, isTemporary: false))
+                            viewModel.appendAttachment(.init(url: url, isTemporary: false))
                         }
                         continue
                     }
                     
                     if let url = try? await item.loadTransferable(type: URL.self) {
                         await MainActor.run {
-                            appendAttachment(.init(url: url, isTemporary: false))
+                            viewModel.appendAttachment(.init(url: url, isTemporary: false))
                         }
                         continue
                     }
@@ -215,7 +274,7 @@ struct ComposerPickerView: View {
                     if let data = try? await item.loadTransferable(type: Data.self),
                        let tempURL = writeAttachmentDataToTemporaryURL(data) {
                         await MainActor.run {
-                            appendAttachment(.init(url: tempURL, isTemporary: true))
+                            viewModel.appendAttachment(.init(url: tempURL, isTemporary: true))
                         }
                     }
                 }
@@ -227,44 +286,8 @@ struct ComposerPickerView: View {
         }
         .fullScreenCover(isPresented: $cameraPresented) {
             CameraPicker(isPresented: $cameraPresented) { result in
-                appendAttachment(result)
+                viewModel.appendAttachment(result)
             }
-        }
-        .onChange(of: attachments) { newValue in
-            if newValue.isEmpty {
-                selectedAssetURLs.removeAll()
-                cleanupTemporaryAttachmentFiles(at: Array(temporaryAttachmentURLs))
-                temporaryAttachmentURLs.removeAll()
-            }
-        }
-    }
-    
-    @MainActor
-    private func selectAsset(assetID: String, attachment: AttachmentLocation) {
-        guard selectedAssetURLs[assetID] == nil else { return }
-        selectedAssetURLs[assetID] = attachment.url
-        appendAttachment(attachment)
-    }
-    
-    @MainActor
-    private func deselectAsset(assetID: String) {
-        guard let removed = selectedAssetURLs.removeValue(forKey: assetID) else { return }
-        if temporaryAttachmentURLs.contains(removed) {
-            cleanupTemporaryAttachmentFiles(at: [removed])
-            temporaryAttachmentURLs.remove(removed)
-        }
-        if let index = attachments.firstIndex(of: removed) {
-            attachments.remove(at: index)
-        }
-    }
-    
-    @MainActor
-    private func appendAttachment(_ attachment: AttachmentLocation) {
-        attachments.append(attachment.url)
-        if attachment.isTemporary {
-            temporaryAttachmentURLs.insert(attachment.url)
-        } else {
-            temporaryAttachmentURLs.remove(attachment.url)
         }
     }
 }
@@ -541,11 +564,6 @@ final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePicker
     }
 }
 
-private struct AttachmentLocation {
-    let url: URL
-    let isTemporary: Bool
-}
-
 private func writeAttachmentDataToTemporaryURL(_ data: Data) -> URL? {
     let fileManager = FileManager.default
     let fileURL = fileManager.temporaryDirectory.appendingPathComponent(
@@ -571,29 +589,14 @@ private func writeAttachmentDataToTemporaryURL(_ data: Data) -> URL? {
     }
 }
 
-private func cleanupTemporaryAttachmentFiles(at urls: [URL]) {
-    let fileManager = FileManager.default
-    let uniqueURLs = Set(urls.filter { $0.isFileURL })
-    
-    for url in uniqueURLs {
-        do {
-            try fileManager.removeItem(at: url)
-        } catch let error as NSError {
-            if error.domain == NSCocoaErrorDomain,
-               error.code == NSFileNoSuchFileError {
-                continue
-            }
-            print("ComposerView attachment cleanup error: \(error.localizedDescription)")
-        }
-    }
-}
-
 public struct MessageData {
     public let text: String
     public let attachments: [URL]
+    public var chatOption: ChatOption?
     
-    public init(text: String, attachments: [URL] = []) {
+    public init(text: String, attachments: [URL] = [], chatOption: ChatOption? = nil) {
         self.text = text
         self.attachments = attachments
+        self.chatOption = chatOption
     }
 }
