@@ -15,7 +15,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/JohnSundell/Splash.git", exact: "0.16.0"),
-        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui.git", exact: "2.4.0")
+        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui.git", exact: "2.4.0"),
+        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", exact: "0.10.2")
     ],
     targets: [
         .target(

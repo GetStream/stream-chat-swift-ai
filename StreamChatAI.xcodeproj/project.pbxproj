@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		841457992EC20FF100D0D034 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = 841457982EC20FF100D0D034 /* MCP */; };
 		842A1C202CC8E1B5001D93F3 /* StreamChatAI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 842A1C152CC8E1B5001D93F3 /* StreamChatAI.framework */; };
 		842A1C3A2CC8E276001D93F3 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 842A1C392CC8E276001D93F3 /* MarkdownUI */; };
 		842A1C3D2CC8E2C0001D93F3 /* Splash in Frameworks */ = {isa = PBXBuildFile; productRef = 842A1C3C2CC8E2C0001D93F3 /* Splash */; };
@@ -58,6 +59,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				841457992EC20FF100D0D034 /* MCP in Frameworks */,
 				842A1C3A2CC8E276001D93F3 /* MarkdownUI in Frameworks */,
 				842A1C3D2CC8E2C0001D93F3 /* Splash in Frameworks */,
 			);
@@ -125,6 +127,7 @@
 			packageProductDependencies = (
 				842A1C392CC8E276001D93F3 /* MarkdownUI */,
 				842A1C3C2CC8E2C0001D93F3 /* Splash */,
+				841457982EC20FF100D0D034 /* MCP */,
 			);
 			productName = StreamChatAI;
 			productReference = 842A1C152CC8E1B5001D93F3 /* StreamChatAI.framework */;
@@ -183,6 +186,7 @@
 			packageReferences = (
 				842A1C382CC8E276001D93F3 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 				842A1C3B2CC8E2C0001D93F3 /* XCRemoteSwiftPackageReference "Splash" */,
+				841457972EC20FF100D0D034 /* XCRemoteSwiftPackageReference "swift-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 842A1C162CC8E1B5001D93F3 /* Products */;
@@ -241,7 +245,7 @@
 		842A1C292CC8E1B5001D93F3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
@@ -253,7 +257,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -275,7 +279,7 @@
 		842A1C2A2CC8E1B5001D93F3 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
@@ -287,7 +291,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -359,7 +363,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -419,7 +423,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -496,6 +500,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		841457972EC20FF100D0D034 /* XCRemoteSwiftPackageReference "swift-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/modelcontextprotocol/swift-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.10.2;
+			};
+		};
 		842A1C382CC8E276001D93F3 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui.git";
@@ -515,6 +527,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		841457982EC20FF100D0D034 /* MCP */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 841457972EC20FF100D0D034 /* XCRemoteSwiftPackageReference "swift-sdk" */;
+			productName = MCP;
+		};
 		842A1C392CC8E276001D93F3 /* MarkdownUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 842A1C382CC8E276001D93F3 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
