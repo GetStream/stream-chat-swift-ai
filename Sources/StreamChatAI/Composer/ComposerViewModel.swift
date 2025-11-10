@@ -25,7 +25,6 @@ public class ComposerViewModel: ObservableObject {
     @Published public var chatOptions: [ChatOption]
 
     public init(
-        text: String = "",
         sheetShown: Bool = false,
         attachments: [URL] = [],
         selectedAssetURLs: [String : URL] = [:],
@@ -34,7 +33,6 @@ public class ComposerViewModel: ObservableObject {
         isTextFieldFocused: Bool = false,
         chatOptions: [ChatOption] = []
     ) {
-        self.text = text
         self.sheetShown = sheetShown
         self.attachments = attachments
         self.selectedAssetURLs = selectedAssetURLs
