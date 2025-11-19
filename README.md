@@ -4,6 +4,8 @@ This official repository for Stream Chat's UI components is designed specificall
 
 To start, this library includes the following components which assist with this task:
 - `StreamingMessageView` - a component that is able to render text, markdown and code in real-time, using character-by-character animation, similar to ChatGPT.
+- `ComposerView` - a fully featured prompt composer with attachments, suggestion chips and speech input.
+- `TranscribeSpeechButton` - a reusable button that records voice input and streams the recognized transcript back into your UI.
 - `AITypingIndicatorView` - a component that can display different states of the LLM (thinking, checking external sources, etc).
 
 Our team plans to keep iterating and adding more components over time. If there's a component you use every day in your apps and would like to see added, please open an issue and we will try to add it 😎.
@@ -42,6 +44,47 @@ StreamingMessageView(
 
 Additionally, you can specify the speed of the animation, with the `letterInterval` parameter. The default value is 0.005 (5ms).
 
+### AI Typing Indicator View
+
+The `AITypingIndicatorView` is used to present different states of the LLM, such as "Thinking", "Checking External Sources", etc. You can specify any text you need. There's also a nice animation when the indicator is shown.
+
+```swift
+AITypingIndicatorView(text: "Thinking")
+```
+
+### Composer View
+
+The `ComposerView` gives users a modern text-entry surface with attachment previews, suggestion chips, and an integrated send button. Inject a `ComposerViewModel` to handle state and pass a closure that receives every `MessageData` payload when the user taps send.
+
+```swift
+@available(iOS 16, *)
+ComposerView(
+    viewModel: ComposerViewModel(),
+    colors: colors
+) { message in
+    print(message.text, message.attachments)
+}
+```
+
+The view also exposes chat option chips via `chatOptions` on the view model and automatically resets attachments once a message is sent.
+
+### Transcribe Speech Button
+
+`TranscribeSpeechButton` turns voice input into text using Apple's Speech framework. When tapped it asks for microphone access, records audio, and forwards the recognized transcript through its closure.
+
+```swift
+TranscribeSpeechButton(
+    locale: Locale(identifier: "en-US"),
+    colors: colors
+) { transcript in
+    print("User said:", transcript)
+}
+```
+
+Display it alongside `ComposerView` to let users dictate prompts when their hands are busy.
+
+These components are designed to work seamlessly with our existing Swift UI [Chat SDK](https://getstream.io/tutorials/ios-chat/). Our [developer guide](https://getstream.io/chat/solutions/ai-integration/) explains how to get started building AI integrations with Stream and Swift UI. 
+
 ### Customizing Colors
 
 The `Colors` class centralizes the palette that the AI components use. Create a single instance and inject it into the views you render to keep them in sync:
@@ -70,16 +113,6 @@ TranscribeSpeechButton(colors: colors) { transcript in
     print(transcript)
 }
 ```
-
-### AI Typing Indicator View
-
-The `AITypingIndicatorView` is used to present different states of the LLM, such as "Thinking", "Checking External Sources", etc. You can specify any text you need. There's also a nice animation when the indicator is shown.
-
-```swift
-AITypingIndicatorView(text: "Thinking")
-```
-
-These components are designed to work seamlessly with our existing Swift UI [Chat SDK](https://getstream.io/tutorials/ios-chat/). Our [developer guide](https://getstream.io/chat/solutions/ai-integration/) explains how to get started building AI integrations with Stream and Swift UI. 
 
 <br />
 
