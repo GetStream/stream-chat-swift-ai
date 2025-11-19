@@ -24,6 +24,9 @@ let package = Package(
             dependencies: [
                 .product(name: "Splash", package: "Splash"),
                 .product(name: "MarkdownUI", package: "swift-markdown-ui")
+            ],
+            resources: [
+                .process("Resources")
             ]
         )
     ]

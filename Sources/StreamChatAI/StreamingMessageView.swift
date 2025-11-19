@@ -132,7 +132,7 @@ public struct StreamingMessageView: View {
     private func codeBlock(_ configuration: CodeBlockConfiguration) -> some View {
       VStack(spacing: 0) {
         HStack {
-          Text(configuration.language ?? "plain text")
+          Text(configuration.language ?? L10n.StreamingMessage.codeBlockLanguageFallback)
             .font(.system(.caption, design: .monospaced))
             .fontWeight(.semibold)
             .foregroundColor(Color(theme.plainTextColor))

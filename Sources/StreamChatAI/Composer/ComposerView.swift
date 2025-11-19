@@ -79,7 +79,7 @@ public struct ComposerView: View {
                 }
                 
                 HStack {
-                    TextField("Ask anything", text: $viewModel.text, axis: .vertical)
+                    TextField(L10n.Composer.placeholderAskAnything, text: $viewModel.text, axis: .vertical)
                         .lineLimit(1...5)
                         .textFieldStyle(.plain)
                         .focused($isFocused)
@@ -178,7 +178,7 @@ struct ComposerPickerView: View {
                     maxSelectionCount: 10,
                     matching: .images
                 ) {
-                    Text("All Photos")
+                    Text(L10n.Composer.buttonAllPhotos)
                         .padding(.vertical, 8)
                         .padding(.horizontal, 12)
                         .background(Color(UIColor.secondarySystemBackground))

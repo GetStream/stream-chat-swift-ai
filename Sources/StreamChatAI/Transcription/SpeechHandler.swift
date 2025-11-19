@@ -160,7 +160,7 @@ enum SpeechHandlerError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .recognizerUnavailable:
-            return "Speech recognizer is unavailable."
+            return L10n.Transcription.recognizerUnavailable
         }
     }
 }
