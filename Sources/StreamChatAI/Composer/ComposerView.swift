@@ -11,6 +11,8 @@ import UIKit
 public struct ComposerView: View {
 
     @StateObject var viewModel: ComposerViewModel
+    @StateObject var speechHandler: SpeechHandler = .init()
+    
     private let colors: Colors
     
     var onMessageSend: (MessageData) -> Void
@@ -84,21 +86,29 @@ public struct ComposerView: View {
                         .textFieldStyle(.plain)
                         .focused($isFocused)
                     
-                    if text.isEmpty {
-                        TranscribeSpeechButton(colors: colors) { newText in
+                    ZStack {
+                        TranscribeSpeechButton(
+                            speechHandler: speechHandler,
+                            colors: colors
+                        ) { newText in
                             viewModel.text = newText
                         }
                         .fontWeight(.semibold)
-                    } else {
+                        .opacity(text.isEmpty ? 1 : 0)
+                        
                         Button {
                             onMessageSend(.init(text: text, attachments: viewModel.attachments, chatOption: viewModel.selectedChatOption))
                             viewModel.cleanUpData()
+                            if speechHandler.isRecording {
+                                speechHandler.stop()
+                            }
                         } label: {
                             Image(systemName: "arrow.up.circle.fill")
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
                                 .frame(width: 22)
                         }
+                        .opacity(text.isEmpty ? 0 : 1)
                     }
                 }
             }

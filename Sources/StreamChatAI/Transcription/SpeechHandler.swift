@@ -7,7 +7,7 @@ import AVFoundation
 import Speech
 import Combine
 
-final class SpeechHandler: NSObject, ObservableObject {
+public final class SpeechHandler: NSObject, ObservableObject {
     // Public state for SwiftUI
     @Published private(set) var isRecording = false
     @Published var transcript: String = ""
@@ -27,8 +27,12 @@ final class SpeechHandler: NSObject, ObservableObject {
     private var availabilityCancellable: AnyCancellable?
     private var monitorTask: Task<Void, Never>?
     
+    public override init() {
+        // Public init.
+    }
+    
     // MARK: - Authorization
-    func requestAuthorization() {
+    public func requestAuthorization() {
         SFSpeechRecognizer.requestAuthorization { [weak self] status in
             DispatchQueue.main.async {
                 self?.authorizationStatus = status
@@ -37,7 +41,7 @@ final class SpeechHandler: NSObject, ObservableObject {
     }
     
     // MARK: - Recording Control
-    func start() {
+    public func start() {
         guard !isRecording else { return }
         lastError = nil
         
@@ -60,7 +64,7 @@ final class SpeechHandler: NSObject, ObservableObject {
         }
     }
     
-    func stop() {
+    public func stop() {
         monitorTask?.cancel()
         monitorTask = nil
         

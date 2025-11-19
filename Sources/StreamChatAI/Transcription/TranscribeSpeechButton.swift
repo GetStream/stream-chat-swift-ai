@@ -5,7 +5,7 @@
 import SwiftUI
 
 public struct TranscribeSpeechButton: View {
-    @StateObject private var speech = SpeechHandler()
+    @StateObject private var speech: SpeechHandler
     @State private var isRecording = false
     
     private var locale: Locale
@@ -15,6 +15,7 @@ public struct TranscribeSpeechButton: View {
     var onTranscriptChange: (String) -> ()
     
     public init(
+        speechHandler: SpeechHandler? = nil,
         locale: Locale? = nil,
         silenceTimeout: Double = 2.0,
         colors: Colors = Colors(),
@@ -24,6 +25,7 @@ public struct TranscribeSpeechButton: View {
         self.silenceTimeout = silenceTimeout
         self.colors = colors
         self.onTranscriptChange = onTranscriptChange
+        _speech = StateObject(wrappedValue: speechHandler ?? .init())
     }
     
     public var body: some View {
