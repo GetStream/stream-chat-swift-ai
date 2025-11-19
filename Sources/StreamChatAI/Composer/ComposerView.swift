@@ -11,6 +11,7 @@ import UIKit
 public struct ComposerView: View {
 
     @StateObject var viewModel: ComposerViewModel
+    private let colors: Colors
     
     var onMessageSend: (MessageData) -> Void
     
@@ -18,9 +19,11 @@ public struct ComposerView: View {
     
     public init(
         viewModel: ComposerViewModel? = nil,
+        colors: Colors = Colors(),
         onMessageSend: @escaping (MessageData) -> Void
     ) {
         _viewModel = StateObject(wrappedValue: viewModel ?? ComposerViewModel())
+        self.colors = colors
         self.onMessageSend = onMessageSend
     }
     
@@ -30,11 +33,11 @@ public struct ComposerView: View {
                 viewModel.sheetShown = true
             } label: {
                 Image(systemName: "plus")
-                    .foregroundStyle(.gray)
+                    .foregroundStyle(colors.composer.attachmentButtonIcon)
                     .fontWeight(.semibold)
             }
             .padding(.all, 12)
-            .background(Color(UIColor.secondarySystemBackground))
+            .background(colors.composer.attachmentButtonBackground)
             .clipShape(.circle)
             
             VStack(spacing: 16) {
@@ -66,9 +69,9 @@ public struct ComposerView: View {
                                 Image(systemName: "xmark")
                             }
                         }
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(colors.composer.selectedOptionForeground)
                         .padding(.all, 8)
-                        .background(Color(UIColor.systemBackground))
+                        .background(colors.composer.selectedOptionBackground)
                         .cornerRadius(16)
                         
                         Spacer()
@@ -82,11 +85,10 @@ public struct ComposerView: View {
                         .focused($isFocused)
                     
                     if text.isEmpty {
-                        TranscribeSpeechButton { newText in
+                        TranscribeSpeechButton(colors: colors) { newText in
                             viewModel.text = newText
                         }
                         .fontWeight(.semibold)
-                        .foregroundStyle(.gray)
                     } else {
                         Button {
                             onMessageSend(.init(text: text, attachments: viewModel.attachments, chatOption: viewModel.selectedChatOption))
@@ -101,11 +103,11 @@ public struct ComposerView: View {
                 }
             }
             .padding(.all, 12)
-            .background(Color(UIColor.secondarySystemBackground))
+            .background(colors.composer.containerBackground)
             .cornerRadius(24)
         }
         .padding(.all, 8)
-        .foregroundStyle(.primary)
+        .foregroundStyle(colors.composer.containerForeground)
         .sheet(isPresented: $viewModel.sheetShown) {
             ComposerPickerView(
                 viewModel: viewModel

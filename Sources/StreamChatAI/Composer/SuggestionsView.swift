@@ -9,17 +9,20 @@ public struct SuggestionsView: View {
     var suggestions: [String]
     var height: CGFloat
     var itemMaxWidth: CGFloat
+    private let colors: Colors
     var onMessageSend: (MessageData) -> ()
     
     public init(
         suggestions: [String],
         height: CGFloat = 100,
         itemMaxWidth: CGFloat = 160,
+        colors: Colors = Colors(),
         onMessageSend: @escaping (MessageData) -> ()
     ) {
         self.suggestions = suggestions
         self.height = height
         self.itemMaxWidth = itemMaxWidth
+        self.colors = colors
         self.onMessageSend = onMessageSend
     }
     
@@ -32,13 +35,13 @@ public struct SuggestionsView: View {
                     } label: {
                         Text(option)
                             .font(.subheadline)
-                            .foregroundColor(.primary)
+                            .foregroundColor(colors.suggestions.text)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: itemMaxWidth)
                             .padding()
-                            .background(Color(UIColor.secondarySystemBackground))
+                            .background(colors.suggestions.background)
                             .cornerRadius(16)
                     }
                 }
@@ -48,4 +51,3 @@ public struct SuggestionsView: View {
         .frame(height: height)
     }
 }
-

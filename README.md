@@ -42,6 +42,35 @@ StreamingMessageView(
 
 Additionally, you can specify the speed of the animation, with the `letterInterval` parameter. The default value is 0.005 (5ms).
 
+### Customizing Colors
+
+The `Colors` class centralizes the palette that the AI components use. Create a single instance and inject it into the views you render to keep them in sync:
+
+```swift
+let colors = Colors(
+    composer: .init(
+        attachmentButtonIcon: .pink,
+        selectedOptionForeground: .purple
+    ),
+    suggestions: .init(background: .mint.opacity(0.3)),
+    transcription: .init(icon: .orange)
+)
+
+ComposerView(colors: colors) { message in
+    // Handle message
+}
+
+SuggestionsView(
+    suggestions: ["What are the docs for the AI SDK?"],
+    colors: colors,
+    onMessageSend: handleSuggestion
+)
+
+TranscribeSpeechButton(colors: colors) { transcript in
+    print(transcript)
+}
+```
+
 ### AI Typing Indicator View
 
 The `AITypingIndicatorView` is used to present different states of the LLM, such as "Thinking", "Checking External Sources", etc. You can specify any text you need. There's also a nice animation when the indicator is shown.

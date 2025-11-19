@@ -10,16 +10,19 @@ public struct TranscribeSpeechButton: View {
     
     private var locale: Locale
     private var silenceTimeout: Double
+    private let colors: Colors
     
     var onTranscriptChange: (String) -> ()
     
     public init(
         locale: Locale? = nil,
         silenceTimeout: Double = 2.0,
+        colors: Colors = Colors(),
         onTranscriptChange: @escaping (String) -> () = { _ in }
     ) {
         self.locale = locale ?? Locale.current
         self.silenceTimeout = silenceTimeout
+        self.colors = colors
         self.onTranscriptChange = onTranscriptChange
     }
     
@@ -33,6 +36,7 @@ public struct TranscribeSpeechButton: View {
                 }
             } label: {
                 Image(systemName: isRecording ? "stop.circle" : "mic")
+                    .foregroundStyle(colors.transcription.icon)
             }
         }
         .onAppear {
