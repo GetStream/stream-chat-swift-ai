@@ -52,7 +52,7 @@ public struct SidebarView<Menu: View, Content: View>: View {
                 HStack(spacing: 0) {
                     menu()
                         .frame(width: splitWidth, height: geometry.size.height)
-                        .background(Color.white)
+                        .background(Color(.systemBackground))
                         .shadow(color: .black.opacity(0.15), radius: 12, x: 4, y: 0)
                         .simultaneousGesture(contentGesture, including: .gesture)
                     

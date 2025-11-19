@@ -192,9 +192,10 @@ struct ComposerPickerView: View {
                         AttachmentTile {
                             Image(systemName: "camera")
                                 .fontWeight(.semibold)
-                                .foregroundStyle(.black)
+                                .foregroundStyle(.primary)
                         }
                     }
+                    .tint(.primary)
                     .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
                     
                     ForEach(photoLibrary.recentAssets, id: \.localIdentifier) { asset in
@@ -241,7 +242,8 @@ struct ComposerPickerView: View {
                                     }
                                     Spacer()
                                 }
-                                .foregroundStyle(.black)
+                                .tint(.primary)
+                                .foregroundStyle(.primary)
                             }
                         }
                     }
