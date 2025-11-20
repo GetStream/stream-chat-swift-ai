@@ -4,7 +4,7 @@
 
 import SwiftUI
 
-public struct TranscribeSpeechButton: View {
+public struct SpeechToTextButton: View {
     @StateObject private var speech: SpeechHandler
     @State private var isRecording = false
     

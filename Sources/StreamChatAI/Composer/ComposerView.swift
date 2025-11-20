@@ -87,7 +87,7 @@ public struct ComposerView: View {
                         .focused($isFocused)
                     
                     ZStack {
-                        TranscribeSpeechButton(
+                        SpeechToTextButton(
                             speechHandler: speechHandler,
                             colors: colors
                         ) { newText in
