@@ -15,18 +15,25 @@ public struct ComposerView: View {
     
     private let colors: Colors
     
+    var isGenerating: Bool
+    
     var onMessageSend: (MessageData) -> Void
+    var onStopGenerating: (() -> Void)?
     
     @FocusState var isFocused: Bool
     
     public init(
         viewModel: ComposerViewModel? = nil,
         colors: Colors = Colors(),
-        onMessageSend: @escaping (MessageData) -> Void
+        isGenerating: Bool = false,
+        onMessageSend: @escaping (MessageData) -> Void,
+        onStopGenerating: (() -> Void)? = nil
     ) {
         _viewModel = StateObject(wrappedValue: viewModel ?? ComposerViewModel())
         self.colors = colors
         self.onMessageSend = onMessageSend
+        self.isGenerating = isGenerating
+        self.onStopGenerating = onStopGenerating
     }
     
     public var body: some View {
@@ -94,7 +101,7 @@ public struct ComposerView: View {
                             viewModel.text = newText
                         }
                         .fontWeight(.semibold)
-                        .opacity(text.isEmpty ? 1 : 0)
+                        .opacity(isGenerating ? 0 : (text.isEmpty ? 1 : 0))
                         
                         Button {
                             onMessageSend(.init(text: text, attachments: viewModel.attachments, chatOption: viewModel.selectedChatOption))
@@ -108,7 +115,15 @@ public struct ComposerView: View {
                                 .aspectRatio(contentMode: .fit)
                                 .frame(width: 22)
                         }
-                        .opacity(text.isEmpty ? 0 : 1)
+                        .opacity(isGenerating ? 0 : (text.isEmpty ? 0 : 1))
+                        
+                        Button {
+                            onStopGenerating?()
+                        } label: {
+                            Image(systemName: "stop.circle")
+                                .foregroundStyle(colors.transcription.icon)
+                        }
+                        .opacity(isGenerating ? 1 : 0)
                     }
                 }
             }
