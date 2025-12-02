@@ -5,7 +5,7 @@ This official repository for Stream Chat's UI components is designed specificall
 To start, this library includes the following components which assist with this task:
 - `StreamingMessageView` - a component that is able to render text, markdown and code in real-time, using character-by-character animation, similar to ChatGPT.
 - `ComposerView` - a fully featured prompt composer with attachments, suggestion chips and speech input.
-- `TranscribeSpeechButton` - a reusable button that records voice input and streams the recognized transcript back into your UI.
+- `SpeechToTextButton` - a reusable button that records voice input and streams the recognized transcript back into your UI.
 - `AITypingIndicatorView` - a component that can display different states of the LLM (thinking, checking external sources, etc).
 
 Our team plans to keep iterating and adding more components over time. If there's a component you use every day in your apps and would like to see added, please open an issue and we will try to add it 😎.
@@ -68,12 +68,12 @@ ComposerView(
 
 The view also exposes chat option chips via `chatOptions` on the view model and automatically resets attachments once a message is sent.
 
-### Transcribe Speech Button
+### Speech to Text Button
 
-`TranscribeSpeechButton` turns voice input into text using Apple's Speech framework. When tapped it asks for microphone access, records audio, and forwards the recognized transcript through its closure.
+`SpeechToTextButton` turns voice input into text using Apple's Speech framework. When tapped it asks for microphone access, records audio, and forwards the recognized transcript through its closure.
 
 ```swift
-TranscribeSpeechButton(
+SpeechToTextButton(
     locale: Locale(identifier: "en-US"),
     colors: colors
 ) { transcript in
@@ -109,7 +109,7 @@ SuggestionsView(
     onMessageSend: handleSuggestion
 )
 
-TranscribeSpeechButton(colors: colors) { transcript in
+SpeechToTextButton(colors: colors) { transcript in
     print(transcript)
 }
 ```
