@@ -17,12 +17,12 @@ Our team plans to keep iterating and adding more components over time. If there'
 The AI components are available via the Swift Package Manager (SPM). Use the following steps to add the SDK via SPM in Xcode:
 - Select "Add Packages…" in File menu
 - Paste the URL https://github.com/GetStream/stream-chat-swift-ai.git
-- In the option "Dependency Rule" choose "Up to next major version", and in the text inputs next to it, enter "0.1.0" and "1.0.0" accordingly.
+- In the option "Dependency Rule" choose "Up to next major version", and in the text inputs next to it, enter "0.4.0" and "1.0.0" accordingly.
 
 You can also add the components in your package file as a dependency:
 
 ```swift
-.package(url: "https://github.com/GetStream/stream-chat-swift-ai.git", from: "0.1.0")
+.package(url: "https://github.com/GetStream/stream-chat-swift-ai.git", from: "0.4.0")
 ```
 
 The components depend on John Sundell's [Splash](https://github.com/JohnSundell/Splash), as well as Guille Gonzalez's [Swift Markdown UI](https://github.com/gonzalezreal/swift-markdown-ui).
