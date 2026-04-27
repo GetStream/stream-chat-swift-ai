@@ -23,6 +23,7 @@ let package = Package(
             name: "StreamChatAI",
             dependencies: [
                 .product(name: "Splash", package: "Splash"),
+                .product(name: "MCP", package: "swift-sdk"),
                 .product(name: "MarkdownUI", package: "swift-markdown-ui")
             ],
             resources: [
