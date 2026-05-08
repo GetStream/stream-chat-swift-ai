@@ -8,7 +8,9 @@ import SwiftUI
 import UIKit
 
 @available(iOS 16, *)
-public struct ComposerView: View {
+public struct ComposerView<ComposerFactory: ComposerViewFactory>: View {
+    
+    private let viewFactory: ComposerFactory
 
     @StateObject var viewModel: ComposerViewModel
     
@@ -22,12 +24,14 @@ public struct ComposerView: View {
     @FocusState var isFocused: Bool
     
     public init(
+        viewFactory: ComposerFactory,
         viewModel: ComposerViewModel? = nil,
         colors: Colors = Colors(),
         isGenerating: Bool = false,
         onMessageSend: @escaping (MessageData) -> Void,
         onStopGenerating: (() -> Void)? = nil
     ) {
+        self.viewFactory = viewFactory
         _viewModel = StateObject(wrappedValue: viewModel ?? ComposerViewModel())
         self.colors = colors
         self.onMessageSend = onMessageSend
@@ -37,26 +41,32 @@ public struct ComposerView: View {
     
     public var body: some View {
         HStack {
-            AddAttachmentsButton(colors: colors) {
-                viewModel.sheetShown = true
-            }
-            
-            ComposerInputView(
-                viewModel: viewModel,
-                colors: colors,
-                isGenerating: isGenerating,
-                isFocused: _isFocused,
-                onMessageSend: onMessageSend,
-                onStopGenerating: onStopGenerating
+            viewFactory.makeLeadingComposerView(
+                options: .init(
+                    colors: colors, onTap: {
+                        viewModel.sheetShown = true
+                    }
+                )
             )
+            
+            viewFactory.makeComposerInputView(
+                options: .init(
+                    viewModel: viewModel,
+                    colors: colors,
+                    isGenerating: isGenerating,
+                    isFocused: _isFocused,
+                    onMessageSend: onMessageSend,
+                    onStopGenerating: onStopGenerating
+                )
+            )
+
+            viewFactory.makeTrailingComposerView(options: .init())
         }
         .padding(.all, 8)
         .foregroundStyle(colors.composer.containerForeground)
         .sheet(isPresented: $viewModel.sheetShown) {
-            ComposerPickerView(
-                viewModel: viewModel
-            )
-            .presentationDetents([.medium, .large])
+            viewFactory.makeComposerPickerView(options: .init(viewModel: viewModel))
+                .presentationDetents([.medium, .large])
         }
         .onAppear {
             if viewModel.isTextFieldFocused {

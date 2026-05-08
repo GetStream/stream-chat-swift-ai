@@ -14,6 +14,9 @@ public protocol ComposerViewFactory {
     
     associatedtype ComposerInputViewType: View
     func makeComposerInputView(options: ComposerInputViewOptions) -> ComposerInputViewType
+    
+    associatedtype ComposerPickerViewType: View
+    func makeComposerPickerView(options: ComposerPickerViewOptions) -> ComposerPickerViewType
 }
 
 public extension ComposerViewFactory {
@@ -28,8 +31,23 @@ public extension ComposerViewFactory {
     }
     
     func makeComposerInputView(options: ComposerInputViewOptions) -> some View {
-        
+        ComposerInputView(
+            viewModel: options.viewModel,
+            colors: options.colors,
+            isGenerating: options.isGenerating,
+            isFocused: options.focusState,
+            onMessageSend: options.onMessageSend,
+            onStopGenerating: options.onStopGenerating
+        )
     }
+    
+    func makeComposerPickerView(options: ComposerPickerViewOptions) -> some View {
+        ComposerPickerView(viewModel: options.viewModel)
+    }
+}
+
+public class DefaultViewFactory: ComposerViewFactory {
+    static let shared = DefaultViewFactory()
 }
 
 public struct LeadingComposerViewOptions {
@@ -40,5 +58,16 @@ public struct LeadingComposerViewOptions {
 public struct TrailingComposerViewOptions {}
 
 public struct ComposerInputViewOptions {
-    
+    public var viewModel: ComposerViewModel
+    public let colors: Colors
+    public let isGenerating: Bool
+    @FocusState public var isFocused: Bool
+    let onMessageSend: (MessageData) -> Void
+    let onStopGenerating: (() -> Void)?
+
+    var focusState: FocusState<Bool> { _isFocused }
+}
+
+public struct ComposerPickerViewOptions {
+    public var viewModel: ComposerViewModel
 }
