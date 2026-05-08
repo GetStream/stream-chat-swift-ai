@@ -35,7 +35,6 @@ public extension ComposerViewFactory {
             viewModel: options.viewModel,
             colors: options.colors,
             isGenerating: options.isGenerating,
-            isFocused: options.focusState,
             onMessageSend: options.onMessageSend,
             onStopGenerating: options.onStopGenerating
         )
@@ -61,11 +60,8 @@ public struct ComposerInputViewOptions {
     public var viewModel: ComposerViewModel
     public let colors: Colors
     public let isGenerating: Bool
-    @FocusState public var isFocused: Bool
     let onMessageSend: (MessageData) -> Void
     let onStopGenerating: (() -> Void)?
-
-    var focusState: FocusState<Bool> { _isFocused }
 }
 
 public struct ComposerPickerViewOptions {

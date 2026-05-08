@@ -20,9 +20,7 @@ public struct ComposerView<ComposerFactory: ComposerViewFactory>: View {
     
     var onMessageSend: (MessageData) -> Void
     var onStopGenerating: (() -> Void)?
-    
-    @FocusState var isFocused: Bool
-    
+
     public init(
         viewFactory: ComposerFactory = DefaultViewFactory.shared,
         viewModel: ComposerViewModel? = nil,
@@ -54,7 +52,6 @@ public struct ComposerView<ComposerFactory: ComposerViewFactory>: View {
                     viewModel: viewModel,
                     colors: colors,
                     isGenerating: isGenerating,
-                    isFocused: _isFocused,
                     onMessageSend: onMessageSend,
                     onStopGenerating: onStopGenerating
                 )
@@ -67,14 +64,6 @@ public struct ComposerView<ComposerFactory: ComposerViewFactory>: View {
         .sheet(isPresented: $viewModel.sheetShown) {
             viewFactory.makeComposerPickerView(options: .init(viewModel: viewModel))
                 .presentationDetents([.medium, .large])
-        }
-        .onAppear {
-            if viewModel.isTextFieldFocused {
-                isFocused = true
-            }
-        }
-        .onChange(of: viewModel.isTextFieldFocused) { newValue in
-            isFocused = viewModel.isTextFieldFocused
         }
     }
 }
@@ -121,7 +110,6 @@ public struct ComposerInputView: View {
         viewModel: ComposerViewModel,
         colors: Colors,
         isGenerating: Bool,
-        isFocused: FocusState<Bool>,
         onMessageSend: @escaping (MessageData) -> Void,
         onStopGenerating: (() -> Void)? = nil
     ) {
@@ -130,7 +118,6 @@ public struct ComposerInputView: View {
         self.isGenerating = isGenerating
         self.onMessageSend = onMessageSend
         self.onStopGenerating = onStopGenerating
-        _isFocused = isFocused
     }
     
     public var body: some View {
@@ -215,8 +202,16 @@ public struct ComposerInputView: View {
         .padding(.all, 12)
         .background(colors.composer.containerBackground)
         .cornerRadius(24)
+        .onAppear {
+            if viewModel.isTextFieldFocused {
+                isFocused = true
+            }
+        }
+        .onChange(of: viewModel.isTextFieldFocused) { newValue in
+            isFocused = newValue
+        }
     }
-    
+
     var text: String {
         viewModel.text
     }
