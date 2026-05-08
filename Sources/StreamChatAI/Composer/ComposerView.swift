@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Stream.io Inc. All rights reserved.
+// Copyright © 2026 Stream.io Inc. All rights reserved.
 //
 
 import Photos
@@ -7,28 +7,65 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
+/// A fully featured prompt-composer surface for AI chat applications.
+///
+/// `ComposerView` is generic over a ``ComposerViewFactory`` so you can swap out any
+/// individual slot — the leading attachment button, the central input area, the
+/// trailing action area, or the attachment picker sheet — without rebuilding the
+/// whole composer from scratch.
+///
+/// ## Basic usage
+///
+/// ```swift
+/// ComposerView { message in
+///     send(message)
+/// }
+/// ```
+///
+/// ## Custom factory
+///
+/// ```swift
+/// ComposerView(viewFactory: MyFactory()) { message in
+///     send(message)
+/// }
+/// ```
+///
+/// Pass a ``ComposerViewModel`` instance if you need to control focus, inject
+/// pre-filled text, or manage chat-option chips from outside the view:
+///
+/// ```swift
+/// @StateObject private var composerViewModel = ComposerViewModel()
+///
+/// ComposerView(viewModel: composerViewModel) { message in
+///     send(message)
+/// }
+/// ```
+///
+/// - Note: Requires iOS 16 or later.
 @available(iOS 16, *)
-public struct ComposerView: View {
+public struct ComposerView<ComposerFactory: ComposerViewFactory>: View {
+    
+    private let viewFactory: ComposerFactory
 
     @StateObject var viewModel: ComposerViewModel
     @StateObject var speechHandler: SpeechHandler = .init()
-    
+
     private let colors: Colors
-    
+
     var isGenerating: Bool
-    
+
     var onMessageSend: (MessageData) -> Void
     var onStopGenerating: (() -> Void)?
-    
-    @FocusState var isFocused: Bool
-    
+
     public init(
+        viewFactory: ComposerFactory = DefaultViewFactory.shared,
         viewModel: ComposerViewModel? = nil,
         colors: Colors = Colors(),
         isGenerating: Bool = false,
         onMessageSend: @escaping (MessageData) -> Void,
         onStopGenerating: (() -> Void)? = nil
     ) {
+        self.viewFactory = viewFactory
         _viewModel = StateObject(wrappedValue: viewModel ?? ComposerViewModel())
         self.colors = colors
         self.onMessageSend = onMessageSend
@@ -38,117 +75,204 @@ public struct ComposerView: View {
     
     public var body: some View {
         HStack {
-            Button {
-                viewModel.sheetShown = true
-            } label: {
-                Image(systemName: "plus")
-                    .foregroundStyle(colors.composer.attachmentButtonIcon)
-                    .fontWeight(.semibold)
-            }
-            .padding(.all, 12)
-            .background(colors.composer.attachmentButtonBackground)
-            .clipShape(.circle)
+            viewFactory.makeLeadingComposerView(
+                options: .init(
+                    colors: colors, onTap: {
+                        viewModel.sheetShown = true
+                    }
+                )
+            )
             
-            VStack(spacing: 16) {
-                if !viewModel.attachments.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            ForEach(viewModel.attachments, id: \.self) { url in
-                                SelectedAttachmentThumbnail(url: url) {
-                                    withAnimation {
-                                        viewModel.removeAttachment(url)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                if let selectedChatOption = viewModel.selectedChatOption {
-                    HStack {
-                        HStack {
-                            Image(systemName: selectedChatOption.icon)
-                            Text(selectedChatOption.shortTitle)
-                                .font(.headline)
-                            Button {
-                                withAnimation {
-                                    viewModel.selectedChatOption = nil
-                                }
-                            } label: {
-                                Image(systemName: "xmark")
-                            }
-                        }
-                        .foregroundStyle(colors.composer.selectedOptionForeground)
-                        .padding(.all, 8)
-                        .background(colors.composer.selectedOptionBackground)
-                        .cornerRadius(16)
-                        
-                        Spacer()
-                    }
-                }
-                
-                HStack {
-                    TextField(L10n.Composer.placeholderAskAnything, text: $viewModel.text, axis: .vertical)
-                        .lineLimit(1...5)
-                        .textFieldStyle(.plain)
-                        .focused($isFocused)
-                    
-                    ZStack {
-                        SpeechToTextButton(
-                            speechHandler: speechHandler,
-                            colors: colors
-                        ) { newText in
-                            viewModel.text = newText
-                        }
-                        .fontWeight(.semibold)
-                        .opacity(isGenerating ? 0 : (text.isEmpty ? 1 : 0))
-                        
-                        Button {
-                            onMessageSend(.init(text: text, attachments: viewModel.attachments, chatOption: viewModel.selectedChatOption))
-                            viewModel.cleanUpData()
-                            if speechHandler.isRecording {
-                                speechHandler.stop()
-                            }
-                        } label: {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 22)
-                        }
-                        .opacity(isGenerating ? 0 : (text.isEmpty ? 0 : 1))
-                        
-                        Button {
-                            onStopGenerating?()
-                        } label: {
-                            Image(systemName: "stop.circle")
-                                .foregroundStyle(colors.transcription.icon)
-                        }
-                        .opacity(isGenerating ? 1 : 0)
-                    }
-                }
-            }
-            .padding(.all, 12)
-            .background(colors.composer.containerBackground)
-            .cornerRadius(24)
+            viewFactory.makeComposerInputView(
+                options: .init(
+                    viewModel: viewModel,
+                    speechHandler: speechHandler,
+                    colors: colors,
+                    isGenerating: isGenerating,
+                    onMessageSend: onMessageSend,
+                    onStopGenerating: onStopGenerating
+                )
+            )
+
+            viewFactory.makeTrailingComposerView(options: .init())
         }
         .padding(.all, 8)
         .foregroundStyle(colors.composer.containerForeground)
         .sheet(isPresented: $viewModel.sheetShown) {
-            ComposerPickerView(
-                viewModel: viewModel
-            )
+            viewFactory.makeComposerPickerView(options: .init(viewModel: viewModel))
                 .presentationDetents([.medium, .large])
         }
+    }
+}
+
+/// The default leading button for ``ComposerView``.
+///
+/// Renders a circular `+` icon that, when tapped, opens the attachment picker sheet.
+/// The ``ComposerViewFactory/makeLeadingComposerView(options:)`` default implementation
+/// returns this view. Supply your own factory method to replace it.
+public struct AddAttachmentsButton: View {
+    
+    var colors: Colors
+    var onTap: () -> Void
+    
+    public init(colors: Colors, onTap: @escaping () -> Void) {
+        self.colors = colors
+        self.onTap = onTap
+    }
+    
+    public var body: some View {
+        Button {
+            onTap()
+        } label: {
+            Image(systemName: "plus")
+                .foregroundStyle(colors.composer.attachmentButtonIcon)
+                .fontWeight(.semibold)
+        }
+        .padding(.all, 12)
+        .background(colors.composer.attachmentButtonBackground)
+        .clipShape(.circle)
+    }
+}
+
+/// The default central input area rendered by ``ComposerView``.
+///
+/// Contains a multi-line `TextField`, an inline ``SpeechToTextButton``, a send
+/// button, and a stop-generating button. It also shows attachment thumbnails and
+/// the active chat-option chip when those are present on the view model.
+///
+/// `ComposerInputView` observes ``ComposerViewModel/isTextFieldFocused`` and keeps
+/// the keyboard in sync: set `isTextFieldFocused = true` to programmatically focus
+/// the field and `false` to dismiss the keyboard.
+///
+/// Override ``ComposerViewFactory/makeComposerInputView(options:)`` to replace this
+/// view with your own implementation while keeping the rest of the composer intact.
+public struct ComposerInputView: View {
+    
+    @ObservedObject var viewModel: ComposerViewModel
+    @ObservedObject var speechHandler: SpeechHandler
+
+    private let colors: Colors
+
+    var isGenerating: Bool
+
+    var onMessageSend: (MessageData) -> Void
+    var onStopGenerating: (() -> Void)?
+
+    @FocusState var isFocused: Bool
+
+    public init(
+        viewModel: ComposerViewModel,
+        speechHandler: SpeechHandler,
+        colors: Colors,
+        isGenerating: Bool,
+        onMessageSend: @escaping (MessageData) -> Void,
+        onStopGenerating: (() -> Void)? = nil
+    ) {
+        self.viewModel = viewModel
+        self.speechHandler = speechHandler
+        self.colors = colors
+        self.isGenerating = isGenerating
+        self.onMessageSend = onMessageSend
+        self.onStopGenerating = onStopGenerating
+    }
+    
+    public var body: some View {
+        VStack(spacing: 16) {
+            if !viewModel.attachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(viewModel.attachments, id: \.self) { url in
+                            SelectedAttachmentThumbnail(url: url) {
+                                withAnimation {
+                                    viewModel.removeAttachment(url)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if let selectedChatOption = viewModel.selectedChatOption {
+                HStack {
+                    HStack {
+                        Image(systemName: selectedChatOption.icon)
+                        Text(selectedChatOption.shortTitle)
+                            .font(.headline)
+                        Button {
+                            withAnimation {
+                                viewModel.selectedChatOption = nil
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                    }
+                    .foregroundStyle(colors.composer.selectedOptionForeground)
+                    .padding(.all, 8)
+                    .background(colors.composer.selectedOptionBackground)
+                    .cornerRadius(16)
+                    
+                    Spacer()
+                }
+            }
+            
+            HStack {
+                TextField(L10n.Composer.placeholderAskAnything, text: $viewModel.text, axis: .vertical)
+                    .lineLimit(1...5)
+                    .textFieldStyle(.plain)
+                    .focused($isFocused)
+                
+                ZStack {
+                    SpeechToTextButton(
+                        speechHandler: speechHandler,
+                        colors: colors
+                    ) { newText in
+                        viewModel.text = newText
+                    }
+                    .fontWeight(.semibold)
+                    .opacity(isGenerating ? 0 : (text.isEmpty ? 1 : 0))
+                    
+                    Button {
+                        onMessageSend(.init(text: text, attachments: viewModel.attachments, chatOption: viewModel.selectedChatOption))
+                        viewModel.cleanUpData()
+                        if speechHandler.isRecording {
+                            speechHandler.stop()
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 22)
+                    }
+                    .opacity(isGenerating ? 0 : (text.isEmpty ? 0 : 1))
+                    
+                    Button {
+                        onStopGenerating?()
+                    } label: {
+                        Image(systemName: "stop.circle")
+                            .foregroundStyle(colors.transcription.icon)
+                    }
+                    .opacity(isGenerating ? 1 : 0)
+                }
+            }
+        }
+        .padding(.all, 12)
+        .background(colors.composer.containerBackground)
+        .cornerRadius(24)
         .onAppear {
             if viewModel.isTextFieldFocused {
                 isFocused = true
             }
         }
         .onChange(of: viewModel.isTextFieldFocused) { newValue in
-            isFocused = viewModel.isTextFieldFocused
+            isFocused = newValue
+        }
+        .onChange(of: viewModel.text) { newText in
+            if newText.isEmpty && speechHandler.isRecording {
+                speechHandler.stop()
+            }
         }
     }
-    
+
     var text: String {
         viewModel.text
     }

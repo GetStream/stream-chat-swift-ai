@@ -87,6 +87,88 @@ Display it alongside `ComposerView` to let users dictate prompts when their hand
 
 These components are designed to work seamlessly with our existing Swift UI [Chat SDK](https://getstream.io/tutorials/ios-chat/). Our [developer guide](https://getstream.io/chat/solutions/ai-integration/) explains how to get started building AI integrations with Stream and Swift UI. 
 
+### Customizing the Composer with View Factory
+
+`ComposerView` accepts a `viewFactory` parameter of any type that conforms to `ComposerViewFactory`. The protocol exposes four independent slots you can override individually — everything else falls back to the built-in default:
+
+| Slot | Factory method | Default |
+|------|----------------|---------|
+| Left of the text field | `makeLeadingComposerView(options:)` | `AddAttachmentsButton` |
+| The text field area | `makeComposerInputView(options:)` | `ComposerInputView` |
+| Right of the text field | `makeTrailingComposerView(options:)` | `EmptyView` |
+| Attachment picker sheet | `makeComposerPickerView(options:)` | Built-in photo/camera picker |
+
+#### Replacing a single slot
+
+Create a class that conforms to `ComposerViewFactory` and override only the method you need. Unoverridden methods keep their defaults automatically.
+
+```swift
+class MyComposerFactory: ComposerViewFactory {
+    // Replace the leading button with a paperclip icon.
+    func makeLeadingComposerView(options: LeadingComposerViewOptions) -> some View {
+        Button {
+            options.onTap()
+        } label: {
+            Image(systemName: "paperclip")
+                .padding(10)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+    }
+}
+```
+
+Then pass the factory to `ComposerView`:
+
+```swift
+ComposerView(viewFactory: MyComposerFactory()) { message in
+    send(message)
+}
+```
+
+#### Replacing the input area
+
+Override `makeComposerInputView(options:)` to take full control of the text field, send button, and everything in between. The `ComposerInputViewOptions` struct gives you access to the view model, the color palette, the generating state, and the send/stop callbacks:
+
+```swift
+class MyComposerFactory: ComposerViewFactory {
+    func makeComposerInputView(options: ComposerInputViewOptions) -> some View {
+        MyCustomInputView(
+            viewModel: options.viewModel,
+            isGenerating: options.isGenerating,
+            onSend: options.onMessageSend,
+            onStop: options.onStopGenerating
+        )
+    }
+}
+```
+
+#### Adding a trailing action button
+
+The trailing slot is empty by default. Override `makeTrailingComposerView(options:)` to add a mode toggle, a slash-command trigger, or any other control:
+
+```swift
+class MyComposerFactory: ComposerViewFactory {
+    func makeTrailingComposerView(options: TrailingComposerViewOptions) -> some View {
+        Button {
+            toggleMode()
+        } label: {
+            Image(systemName: "wand.and.sparkles")
+        }
+    }
+}
+```
+
+#### Programmatic focus
+
+`ComposerInputView` observes `ComposerViewModel.isTextFieldFocused`. Set it to `true` to show the keyboard and `false` to dismiss it from anywhere that holds a reference to the view model:
+
+```swift
+@StateObject private var composerViewModel = ComposerViewModel()
+
+// Focus the keyboard when the screen appears.
+composerViewModel.isTextFieldFocused = true
+```
+
 ### Customizing Colors
 
 The `Colors` class centralizes the palette that the AI components use. Create a single instance and inject it into the views you render to keep them in sync:

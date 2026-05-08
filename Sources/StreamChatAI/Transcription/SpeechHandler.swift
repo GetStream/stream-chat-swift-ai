@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Stream.io Inc. All rights reserved.
+// Copyright © 2026 Stream.io Inc. All rights reserved.
 //
 
 import Foundation
@@ -13,24 +13,26 @@ public final class SpeechHandler: NSObject, ObservableObject {
     @Published var transcript: String = ""
     @Published var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @Published var lastError: Error?
-    
+
     // Configuration
     var locale: Locale = Locale(identifier: "en-US")
-    var silenceTimeout: TimeInterval = 2.5
-    
+    var silenceTimeout: TimeInterval = 3.0
+
     // Internals
     private var speechRecognizer: SFSpeechRecognizer?
-    private let audioEngine = AVAudioEngine()
+    private var audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var lastSpeechTime: Date = .distantPast
-    private var availabilityCancellable: AnyCancellable?
     private var monitorTask: Task<Void, Never>?
-    
+    private var interruptionObserver: NSObjectProtocol?
+    // Incremented each session so callbacks from the previous session are ignored.
+    private var sessionGeneration = 0
+
     public override init() {
         // Public init.
     }
-    
+
     // MARK: - Authorization
     public func requestAuthorization() {
         SFSpeechRecognizer.requestAuthorization { [weak self] status in
@@ -39,56 +41,72 @@ public final class SpeechHandler: NSObject, ObservableObject {
             }
         }
     }
-    
+
     // MARK: - Recording Control
     public func start() {
         guard !isRecording else { return }
         lastError = nil
-        
+
+        let currentStatus = SFSpeechRecognizer.authorizationStatus()
+        if currentStatus == .notDetermined {
+            SFSpeechRecognizer.requestAuthorization { [weak self] status in
+                DispatchQueue.main.async {
+                    self?.authorizationStatus = status
+                    if status == .authorized { self?.start() }
+                }
+            }
+            return
+        }
+        authorizationStatus = currentStatus
+
         speechRecognizer = SFSpeechRecognizer(locale: locale)
         guard let recognizer = speechRecognizer, recognizer.isAvailable else {
             lastError = SpeechHandlerError.recognizerUnavailable
             return
         }
-        
+
         do {
             try configureAudioSession()
-            try startAudioEngine()
             try startRecognition(using: recognizer)
+            try startAudioEngine()
+            isRecording = true
             startSilenceMonitor()
-            
-            DispatchQueue.main.async { self.isRecording = true }
         } catch {
-            stop() // best-effort cleanup
+            stop()
             lastError = error
         }
     }
-    
+
     public func stop() {
         monitorTask?.cancel()
         monitorTask = nil
-        
+
+        if let observer = interruptionObserver {
+            NotificationCenter.default.removeObserver(observer)
+            interruptionObserver = nil
+        }
+
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()
         recognitionTask?.cancel()
-        
+
         recognitionTask = nil
         recognitionRequest = nil
-        
-        DispatchQueue.main.async {
-            self.isRecording = false
-        }
+
+        // Fresh engine so the next session never inherits stale AVAudioEngine state.
+        audioEngine = AVAudioEngine()
+
+        isRecording = false
     }
-    
+
     // MARK: - Private helpers
     private func configureAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
-        
-        // Handle interruptions
-        NotificationCenter.default.addObserver(
+
+        interruptionObserver = NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: session,
             queue: .main
@@ -99,60 +117,73 @@ public final class SpeechHandler: NSObject, ObservableObject {
                 let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
                 let type = AVAudioSession.InterruptionType(rawValue: typeValue)
             else { return }
-            
-            if type == .began {
-                self.stop()
-            }
+            if type == .began { self.stop() }
         }
     }
-    
+
     private func startAudioEngine() throws {
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
-        
+
         inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            self?.recognitionRequest?.append(buffer)
+            guard let self else { return }
+            self.recognitionRequest?.append(buffer)
+            let frameCount = Int(buffer.frameLength)
+            guard frameCount > 0, let channelData = buffer.floatChannelData?[0] else { return }
+            var sum: Float = 0
+            for i in 0..<frameCount { sum += channelData[i] * channelData[i] }
+            if sqrt(sum / Float(frameCount)) > 0.01 {
+                self.lastSpeechTime = Date()
+            }
         }
-        
+
         audioEngine.prepare()
         try audioEngine.start()
     }
-    
+
     private func startRecognition(using recognizer: SFSpeechRecognizer) throws {
         recognitionTask?.cancel()
         recognitionTask = nil
-        
+
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         recognitionRequest = request
-        
+
         transcript = ""
         lastSpeechTime = Date()
-        
+
+        sessionGeneration += 1
+        let generation = sessionGeneration
+
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            guard let self else { return }
+            guard let self, self.sessionGeneration == generation else { return }
             if let result = result {
-                self.transcript = result.bestTranscription.formattedString
+                let text = result.bestTranscription.formattedString
+                guard !text.isEmpty else { return }
                 self.lastSpeechTime = Date()
+                DispatchQueue.main.async {
+                    self.transcript = text
+                }
             }
             if let error = error {
-                self.lastError = error
+                DispatchQueue.main.async { self.lastError = error }
             }
         }
     }
-    
+
     private func startSilenceMonitor() {
         monitorTask?.cancel()
         monitorTask = Task { [weak self] in
             guard let self else { return }
-            while !Task.isCancelled && self.isRecording {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
+                guard !Task.isCancelled else { break }
                 let elapsed = Date().timeIntervalSince(self.lastSpeechTime)
                 if elapsed >= self.silenceTimeout {
                     await MainActor.run { self.stop() }
                     break
                 }
-                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
             }
         }
     }
