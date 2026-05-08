@@ -48,11 +48,12 @@ public struct ComposerView<ComposerFactory: ComposerViewFactory>: View {
     private let viewFactory: ComposerFactory
 
     @StateObject var viewModel: ComposerViewModel
-    
+    @StateObject var speechHandler: SpeechHandler = .init()
+
     private let colors: Colors
-    
+
     var isGenerating: Bool
-    
+
     var onMessageSend: (MessageData) -> Void
     var onStopGenerating: (() -> Void)?
 
@@ -85,6 +86,7 @@ public struct ComposerView<ComposerFactory: ComposerViewFactory>: View {
             viewFactory.makeComposerInputView(
                 options: .init(
                     viewModel: viewModel,
+                    speechHandler: speechHandler,
                     colors: colors,
                     isGenerating: isGenerating,
                     onMessageSend: onMessageSend,
@@ -147,25 +149,27 @@ public struct AddAttachmentsButton: View {
 public struct ComposerInputView: View {
     
     @ObservedObject var viewModel: ComposerViewModel
-    @StateObject var speechHandler: SpeechHandler = .init()
-    
+    @ObservedObject var speechHandler: SpeechHandler
+
     private let colors: Colors
-    
+
     var isGenerating: Bool
-    
+
     var onMessageSend: (MessageData) -> Void
     var onStopGenerating: (() -> Void)?
-    
+
     @FocusState var isFocused: Bool
-    
+
     public init(
         viewModel: ComposerViewModel,
+        speechHandler: SpeechHandler,
         colors: Colors,
         isGenerating: Bool,
         onMessageSend: @escaping (MessageData) -> Void,
         onStopGenerating: (() -> Void)? = nil
     ) {
         self.viewModel = viewModel
+        self.speechHandler = speechHandler
         self.colors = colors
         self.isGenerating = isGenerating
         self.onMessageSend = onMessageSend

@@ -97,6 +97,7 @@ public extension ComposerViewFactory {
     func makeComposerInputView(options: ComposerInputViewOptions) -> some View {
         ComposerInputView(
             viewModel: options.viewModel,
+            speechHandler: options.speechHandler,
             colors: options.colors,
             isGenerating: options.isGenerating,
             onMessageSend: options.onMessageSend,
@@ -138,6 +139,10 @@ public struct TrailingComposerViewOptions {}
 public struct ComposerInputViewOptions {
     /// The shared view model that holds text, attachments, and chat-option state.
     public var viewModel: ComposerViewModel
+    /// The shared speech handler owned by ``ComposerView``. Passing it through options
+    /// rather than letting ``ComposerInputView`` own it keeps the handler alive at the
+    /// outermost view level, preventing identity resets when the input area is recreated.
+    public var speechHandler: SpeechHandler
     /// The color palette in use for the composer.
     public let colors: Colors
     /// `true` while an AI response is being streamed; hides the send button and shows
