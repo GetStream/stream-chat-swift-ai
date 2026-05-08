@@ -33,9 +33,6 @@ public struct SpeechToTextButton: View {
                 if speech.isRecording {
                     speech.stop()
                 } else {
-                    if speech.authorizationStatus == .notDetermined {
-                        speech.requestAuthorization()
-                    }
                     speech.start()
                 }
             } label: {

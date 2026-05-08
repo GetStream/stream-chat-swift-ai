@@ -266,6 +266,11 @@ public struct ComposerInputView: View {
         .onChange(of: viewModel.isTextFieldFocused) { newValue in
             isFocused = newValue
         }
+        .onChange(of: viewModel.text) { newText in
+            if newText.isEmpty && speechHandler.isRecording {
+                speechHandler.stop()
+            }
+        }
     }
 
     var text: String {

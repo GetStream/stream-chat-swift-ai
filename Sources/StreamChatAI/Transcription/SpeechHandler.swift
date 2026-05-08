@@ -44,22 +44,33 @@ public final class SpeechHandler: NSObject, ObservableObject {
     public func start() {
         guard !isRecording else { return }
         lastError = nil
-        
+
+        let currentStatus = SFSpeechRecognizer.authorizationStatus()
+        if currentStatus == .notDetermined {
+            SFSpeechRecognizer.requestAuthorization { [weak self] status in
+                DispatchQueue.main.async {
+                    self?.authorizationStatus = status
+                    if status == .authorized { self?.start() }
+                }
+            }
+            return
+        }
+        authorizationStatus = currentStatus
+
         speechRecognizer = SFSpeechRecognizer(locale: locale)
         guard let recognizer = speechRecognizer, recognizer.isAvailable else {
             lastError = SpeechHandlerError.recognizerUnavailable
             return
         }
-        
+
         do {
             try configureAudioSession()
             try startAudioEngine()
             try startRecognition(using: recognizer)
+            isRecording = true
             startSilenceMonitor()
-            
-            DispatchQueue.main.async { self.isRecording = true }
         } catch {
-            stop() // best-effort cleanup
+            stop()
             lastError = error
         }
     }
@@ -75,10 +86,7 @@ public final class SpeechHandler: NSObject, ObservableObject {
         
         recognitionTask = nil
         recognitionRequest = nil
-        
-        DispatchQueue.main.async {
-            self.isRecording = false
-        }
+        isRecording = false
     }
     
     // MARK: - Private helpers
@@ -133,11 +141,13 @@ public final class SpeechHandler: NSObject, ObservableObject {
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
             if let result = result {
-                self.transcript = result.bestTranscription.formattedString
                 self.lastSpeechTime = Date()
+                DispatchQueue.main.async {
+                    self.transcript = result.bestTranscription.formattedString
+                }
             }
             if let error = error {
-                self.lastError = error
+                DispatchQueue.main.async { self.lastError = error }
             }
         }
     }
@@ -146,13 +156,14 @@ public final class SpeechHandler: NSObject, ObservableObject {
         monitorTask?.cancel()
         monitorTask = Task { [weak self] in
             guard let self else { return }
-            while !Task.isCancelled && self.isRecording {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
+                guard !Task.isCancelled else { break }
                 let elapsed = Date().timeIntervalSince(self.lastSpeechTime)
                 if elapsed >= self.silenceTimeout {
                     await MainActor.run { self.stop() }
                     break
                 }
-                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
             }
         }
     }
