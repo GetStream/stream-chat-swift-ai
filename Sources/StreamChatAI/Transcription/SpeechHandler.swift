@@ -16,7 +16,7 @@ public final class SpeechHandler: NSObject, ObservableObject {
     
     // Configuration
     var locale: Locale = Locale(identifier: "en-US")
-    var silenceTimeout: TimeInterval = 2.5
+    var silenceTimeout: TimeInterval = 3.0
     
     // Internals
     private var speechRecognizer: SFSpeechRecognizer?

@@ -16,7 +16,7 @@ public struct SpeechToTextButton: View {
     public init(
         speechHandler: SpeechHandler? = nil,
         locale: Locale? = nil,
-        silenceTimeout: Double = 2.0,
+        silenceTimeout: Double = 3.0,
         colors: Colors = Colors(),
         onTranscriptChange: @escaping (String) -> () = { _ in }
     ) {
