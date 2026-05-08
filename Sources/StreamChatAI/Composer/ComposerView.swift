@@ -1,5 +1,5 @@
 //
-// Copyright © 2024 Stream.io Inc. All rights reserved.
+// Copyright © 2026 Stream.io Inc. All rights reserved.
 //
 
 import Photos
@@ -11,7 +11,6 @@ import UIKit
 public struct ComposerView: View {
 
     @StateObject var viewModel: ComposerViewModel
-    @StateObject var speechHandler: SpeechHandler = .init()
     
     private let colors: Colors
     
@@ -38,98 +37,18 @@ public struct ComposerView: View {
     
     public var body: some View {
         HStack {
-            Button {
+            AddAttachmentsButton(colors: colors) {
                 viewModel.sheetShown = true
-            } label: {
-                Image(systemName: "plus")
-                    .foregroundStyle(colors.composer.attachmentButtonIcon)
-                    .fontWeight(.semibold)
             }
-            .padding(.all, 12)
-            .background(colors.composer.attachmentButtonBackground)
-            .clipShape(.circle)
             
-            VStack(spacing: 16) {
-                if !viewModel.attachments.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            ForEach(viewModel.attachments, id: \.self) { url in
-                                SelectedAttachmentThumbnail(url: url) {
-                                    withAnimation {
-                                        viewModel.removeAttachment(url)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                if let selectedChatOption = viewModel.selectedChatOption {
-                    HStack {
-                        HStack {
-                            Image(systemName: selectedChatOption.icon)
-                            Text(selectedChatOption.shortTitle)
-                                .font(.headline)
-                            Button {
-                                withAnimation {
-                                    viewModel.selectedChatOption = nil
-                                }
-                            } label: {
-                                Image(systemName: "xmark")
-                            }
-                        }
-                        .foregroundStyle(colors.composer.selectedOptionForeground)
-                        .padding(.all, 8)
-                        .background(colors.composer.selectedOptionBackground)
-                        .cornerRadius(16)
-                        
-                        Spacer()
-                    }
-                }
-                
-                HStack {
-                    TextField(L10n.Composer.placeholderAskAnything, text: $viewModel.text, axis: .vertical)
-                        .lineLimit(1...5)
-                        .textFieldStyle(.plain)
-                        .focused($isFocused)
-                    
-                    ZStack {
-                        SpeechToTextButton(
-                            speechHandler: speechHandler,
-                            colors: colors
-                        ) { newText in
-                            viewModel.text = newText
-                        }
-                        .fontWeight(.semibold)
-                        .opacity(isGenerating ? 0 : (text.isEmpty ? 1 : 0))
-                        
-                        Button {
-                            onMessageSend(.init(text: text, attachments: viewModel.attachments, chatOption: viewModel.selectedChatOption))
-                            viewModel.cleanUpData()
-                            if speechHandler.isRecording {
-                                speechHandler.stop()
-                            }
-                        } label: {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 22)
-                        }
-                        .opacity(isGenerating ? 0 : (text.isEmpty ? 0 : 1))
-                        
-                        Button {
-                            onStopGenerating?()
-                        } label: {
-                            Image(systemName: "stop.circle")
-                                .foregroundStyle(colors.transcription.icon)
-                        }
-                        .opacity(isGenerating ? 1 : 0)
-                    }
-                }
-            }
-            .padding(.all, 12)
-            .background(colors.composer.containerBackground)
-            .cornerRadius(24)
+            ComposerInputView(
+                viewModel: viewModel,
+                colors: colors,
+                isGenerating: isGenerating,
+                isFocused: _isFocused,
+                onMessageSend: onMessageSend,
+                onStopGenerating: onStopGenerating
+            )
         }
         .padding(.all, 8)
         .foregroundStyle(colors.composer.containerForeground)
@@ -137,7 +56,7 @@ public struct ComposerView: View {
             ComposerPickerView(
                 viewModel: viewModel
             )
-                .presentationDetents([.medium, .large])
+            .presentationDetents([.medium, .large])
         }
         .onAppear {
             if viewModel.isTextFieldFocused {
@@ -147,6 +66,145 @@ public struct ComposerView: View {
         .onChange(of: viewModel.isTextFieldFocused) { newValue in
             isFocused = viewModel.isTextFieldFocused
         }
+    }
+}
+
+public struct AddAttachmentsButton: View {
+    
+    var colors: Colors
+    var onTap: () -> Void
+    
+    public init(colors: Colors, onTap: @escaping () -> Void) {
+        self.colors = colors
+        self.onTap = onTap
+    }
+    
+    public var body: some View {
+        Button {
+            onTap()
+        } label: {
+            Image(systemName: "plus")
+                .foregroundStyle(colors.composer.attachmentButtonIcon)
+                .fontWeight(.semibold)
+        }
+        .padding(.all, 12)
+        .background(colors.composer.attachmentButtonBackground)
+        .clipShape(.circle)
+    }
+}
+
+public struct ComposerInputView: View {
+    
+    @ObservedObject var viewModel: ComposerViewModel
+    @StateObject var speechHandler: SpeechHandler = .init()
+    
+    private let colors: Colors
+    
+    var isGenerating: Bool
+    
+    var onMessageSend: (MessageData) -> Void
+    var onStopGenerating: (() -> Void)?
+    
+    @FocusState var isFocused: Bool
+    
+    public init(
+        viewModel: ComposerViewModel,
+        colors: Colors,
+        isGenerating: Bool,
+        isFocused: FocusState<Bool>,
+        onMessageSend: @escaping (MessageData) -> Void,
+        onStopGenerating: (() -> Void)? = nil
+    ) {
+        self.viewModel = viewModel
+        self.colors = colors
+        self.isGenerating = isGenerating
+        self.onMessageSend = onMessageSend
+        self.onStopGenerating = onStopGenerating
+        _isFocused = isFocused
+    }
+    
+    public var body: some View {
+        VStack(spacing: 16) {
+            if !viewModel.attachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(viewModel.attachments, id: \.self) { url in
+                            SelectedAttachmentThumbnail(url: url) {
+                                withAnimation {
+                                    viewModel.removeAttachment(url)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if let selectedChatOption = viewModel.selectedChatOption {
+                HStack {
+                    HStack {
+                        Image(systemName: selectedChatOption.icon)
+                        Text(selectedChatOption.shortTitle)
+                            .font(.headline)
+                        Button {
+                            withAnimation {
+                                viewModel.selectedChatOption = nil
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                    }
+                    .foregroundStyle(colors.composer.selectedOptionForeground)
+                    .padding(.all, 8)
+                    .background(colors.composer.selectedOptionBackground)
+                    .cornerRadius(16)
+                    
+                    Spacer()
+                }
+            }
+            
+            HStack {
+                TextField(L10n.Composer.placeholderAskAnything, text: $viewModel.text, axis: .vertical)
+                    .lineLimit(1...5)
+                    .textFieldStyle(.plain)
+                    .focused($isFocused)
+                
+                ZStack {
+                    SpeechToTextButton(
+                        speechHandler: speechHandler,
+                        colors: colors
+                    ) { newText in
+                        viewModel.text = newText
+                    }
+                    .fontWeight(.semibold)
+                    .opacity(isGenerating ? 0 : (text.isEmpty ? 1 : 0))
+                    
+                    Button {
+                        onMessageSend(.init(text: text, attachments: viewModel.attachments, chatOption: viewModel.selectedChatOption))
+                        viewModel.cleanUpData()
+                        if speechHandler.isRecording {
+                            speechHandler.stop()
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 22)
+                    }
+                    .opacity(isGenerating ? 0 : (text.isEmpty ? 0 : 1))
+                    
+                    Button {
+                        onStopGenerating?()
+                    } label: {
+                        Image(systemName: "stop.circle")
+                            .foregroundStyle(colors.transcription.icon)
+                    }
+                    .opacity(isGenerating ? 1 : 0)
+                }
+            }
+        }
+        .padding(.all, 12)
+        .background(colors.composer.containerBackground)
+        .cornerRadius(24)
     }
     
     var text: String {
