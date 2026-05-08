@@ -47,7 +47,7 @@ public extension ComposerViewFactory {
 }
 
 public class DefaultViewFactory: ComposerViewFactory {
-    static let shared = DefaultViewFactory()
+    public static let shared = DefaultViewFactory()
 }
 
 public struct LeadingComposerViewOptions {

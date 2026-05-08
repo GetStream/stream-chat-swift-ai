@@ -24,7 +24,7 @@ public struct ComposerView<ComposerFactory: ComposerViewFactory>: View {
     @FocusState var isFocused: Bool
     
     public init(
-        viewFactory: ComposerFactory,
+        viewFactory: ComposerFactory = DefaultViewFactory.shared,
         viewModel: ComposerViewModel? = nil,
         colors: Colors = Colors(),
         isGenerating: Bool = false,
