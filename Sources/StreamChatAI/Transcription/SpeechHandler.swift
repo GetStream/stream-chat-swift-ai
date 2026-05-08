@@ -141,9 +141,11 @@ public final class SpeechHandler: NSObject, ObservableObject {
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
             if let result = result {
+                let text = result.bestTranscription.formattedString
+                guard !text.isEmpty else { return }
                 self.lastSpeechTime = Date()
                 DispatchQueue.main.async {
-                    self.transcript = result.bestTranscription.formattedString
+                    self.transcript = text
                 }
             }
             if let error = error {
