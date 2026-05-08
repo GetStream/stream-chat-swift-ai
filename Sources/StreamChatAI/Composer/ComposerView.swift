@@ -7,6 +7,41 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
+/// A fully featured prompt-composer surface for AI chat applications.
+///
+/// `ComposerView` is generic over a ``ComposerViewFactory`` so you can swap out any
+/// individual slot — the leading attachment button, the central input area, the
+/// trailing action area, or the attachment picker sheet — without rebuilding the
+/// whole composer from scratch.
+///
+/// ## Basic usage
+///
+/// ```swift
+/// ComposerView { message in
+///     send(message)
+/// }
+/// ```
+///
+/// ## Custom factory
+///
+/// ```swift
+/// ComposerView(viewFactory: MyFactory()) { message in
+///     send(message)
+/// }
+/// ```
+///
+/// Pass a ``ComposerViewModel`` instance if you need to control focus, inject
+/// pre-filled text, or manage chat-option chips from outside the view:
+///
+/// ```swift
+/// @StateObject private var composerViewModel = ComposerViewModel()
+///
+/// ComposerView(viewModel: composerViewModel) { message in
+///     send(message)
+/// }
+/// ```
+///
+/// - Note: Requires iOS 16 or later.
 @available(iOS 16, *)
 public struct ComposerView<ComposerFactory: ComposerViewFactory>: View {
     
@@ -68,6 +103,11 @@ public struct ComposerView<ComposerFactory: ComposerViewFactory>: View {
     }
 }
 
+/// The default leading button for ``ComposerView``.
+///
+/// Renders a circular `+` icon that, when tapped, opens the attachment picker sheet.
+/// The ``ComposerViewFactory/makeLeadingComposerView(options:)`` default implementation
+/// returns this view. Supply your own factory method to replace it.
 public struct AddAttachmentsButton: View {
     
     var colors: Colors
@@ -92,6 +132,18 @@ public struct AddAttachmentsButton: View {
     }
 }
 
+/// The default central input area rendered by ``ComposerView``.
+///
+/// Contains a multi-line `TextField`, an inline ``SpeechToTextButton``, a send
+/// button, and a stop-generating button. It also shows attachment thumbnails and
+/// the active chat-option chip when those are present on the view model.
+///
+/// `ComposerInputView` observes ``ComposerViewModel/isTextFieldFocused`` and keeps
+/// the keyboard in sync: set `isTextFieldFocused = true` to programmatically focus
+/// the field and `false` to dismiss the keyboard.
+///
+/// Override ``ComposerViewFactory/makeComposerInputView(options:)`` to replace this
+/// view with your own implementation while keeping the rest of the composer intact.
 public struct ComposerInputView: View {
     
     @ObservedObject var viewModel: ComposerViewModel
