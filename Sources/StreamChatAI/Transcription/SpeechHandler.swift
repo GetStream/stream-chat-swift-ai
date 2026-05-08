@@ -117,12 +117,20 @@ public final class SpeechHandler: NSObject, ObservableObject {
     private func startAudioEngine() throws {
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
-        
+
         inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            self?.recognitionRequest?.append(buffer)
+            guard let self else { return }
+            self.recognitionRequest?.append(buffer)
+            let frameCount = Int(buffer.frameLength)
+            guard frameCount > 0, let channelData = buffer.floatChannelData?[0] else { return }
+            var sum: Float = 0
+            for i in 0..<frameCount { sum += channelData[i] * channelData[i] }
+            if sqrt(sum / Float(frameCount)) > 0.015 {
+                self.lastSpeechTime = Date()
+            }
         }
-        
+
         audioEngine.prepare()
         try audioEngine.start()
     }
@@ -143,7 +151,6 @@ public final class SpeechHandler: NSObject, ObservableObject {
             if let result = result {
                 let text = result.bestTranscription.formattedString
                 guard !text.isEmpty else { return }
-                self.lastSpeechTime = Date()
                 DispatchQueue.main.async {
                     self.transcript = text
                 }
