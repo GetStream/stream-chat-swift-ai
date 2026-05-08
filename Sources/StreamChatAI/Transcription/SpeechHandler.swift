@@ -13,24 +13,26 @@ public final class SpeechHandler: NSObject, ObservableObject {
     @Published var transcript: String = ""
     @Published var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @Published var lastError: Error?
-    
+
     // Configuration
     var locale: Locale = Locale(identifier: "en-US")
     var silenceTimeout: TimeInterval = 3.0
-    
+
     // Internals
     private var speechRecognizer: SFSpeechRecognizer?
-    private let audioEngine = AVAudioEngine()
+    private var audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var lastSpeechTime: Date = .distantPast
-    private var availabilityCancellable: AnyCancellable?
     private var monitorTask: Task<Void, Never>?
-    
+    private var interruptionObserver: NSObjectProtocol?
+    // Incremented each session so callbacks from the previous session are ignored.
+    private var sessionGeneration = 0
+
     public override init() {
         // Public init.
     }
-    
+
     // MARK: - Authorization
     public func requestAuthorization() {
         SFSpeechRecognizer.requestAuthorization { [weak self] status in
@@ -39,7 +41,7 @@ public final class SpeechHandler: NSObject, ObservableObject {
             }
         }
     }
-    
+
     // MARK: - Recording Control
     public func start() {
         guard !isRecording else { return }
@@ -74,29 +76,37 @@ public final class SpeechHandler: NSObject, ObservableObject {
             lastError = error
         }
     }
-    
+
     public func stop() {
         monitorTask?.cancel()
         monitorTask = nil
-        
+
+        if let observer = interruptionObserver {
+            NotificationCenter.default.removeObserver(observer)
+            interruptionObserver = nil
+        }
+
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()
         recognitionTask?.cancel()
-        
+
         recognitionTask = nil
         recognitionRequest = nil
+
+        // Fresh engine so the next session never inherits stale AVAudioEngine state.
+        audioEngine = AVAudioEngine()
+
         isRecording = false
     }
-    
+
     // MARK: - Private helpers
     private func configureAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
-        
-        // Handle interruptions
-        NotificationCenter.default.addObserver(
+
+        interruptionObserver = NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: session,
             queue: .main
@@ -107,13 +117,10 @@ public final class SpeechHandler: NSObject, ObservableObject {
                 let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
                 let type = AVAudioSession.InterruptionType(rawValue: typeValue)
             else { return }
-            
-            if type == .began {
-                self.stop()
-            }
+            if type == .began { self.stop() }
         }
     }
-    
+
     private func startAudioEngine() throws {
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
@@ -134,20 +141,23 @@ public final class SpeechHandler: NSObject, ObservableObject {
         audioEngine.prepare()
         try audioEngine.start()
     }
-    
+
     private func startRecognition(using recognizer: SFSpeechRecognizer) throws {
         recognitionTask?.cancel()
         recognitionTask = nil
-        
+
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         recognitionRequest = request
-        
+
         transcript = ""
         lastSpeechTime = Date()
-        
+
+        sessionGeneration += 1
+        let generation = sessionGeneration
+
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            guard let self else { return }
+            guard let self, self.sessionGeneration == generation else { return }
             if let result = result {
                 let text = result.bestTranscription.formattedString
                 guard !text.isEmpty else { return }
@@ -161,7 +171,7 @@ public final class SpeechHandler: NSObject, ObservableObject {
             }
         }
     }
-    
+
     private func startSilenceMonitor() {
         monitorTask?.cancel()
         monitorTask = Task { [weak self] in
