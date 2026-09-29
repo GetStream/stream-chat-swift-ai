@@ -13,16 +13,20 @@ public class Colors {
     public var suggestions: Suggestions
     /// Appearance configuration for `TranscribeSpeechButton`.
     public var transcription: Transcription
+    /// Appearance configuration for `ReasoningView`.
+    public var reasoning: Reasoning
     
     /// Creates a new palette with optional overrides for each supported view.
     public init(
         composer: Composer = .init(),
         suggestions: Suggestions = .init(),
-        transcription: Transcription = .init()
+        transcription: Transcription = .init(),
+        reasoning: Reasoning = .init()
     ) {
         self.composer = composer
         self.suggestions = suggestions
         self.transcription = transcription
+        self.reasoning = reasoning
     }
 }
 
@@ -86,6 +90,27 @@ public extension Colors {
         /// Creates the transcription palette with optional overrides.
         public init(icon: Color = .gray) {
             self.icon = icon
+        }
+    }
+    
+    /// Palette for the reasoning shown while a response is being prepared.
+    struct Reasoning {
+        /// Color of the "Thinking" title and its icon.
+        public var title: Color
+        /// Color of the reasoning text.
+        public var text: Color
+        /// Color of the leading bar next to the reasoning text.
+        public var accent: Color
+        
+        /// Creates the reasoning palette with optional overrides.
+        public init(
+            title: Color = .secondary,
+            text: Color = .secondary,
+            accent: Color = Color(UIColor.separator)
+        ) {
+            self.title = title
+            self.text = text
+            self.accent = accent
         }
     }
 }

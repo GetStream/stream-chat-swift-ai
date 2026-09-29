@@ -1,4 +1,5 @@
 "composer.placeholder.ask_anything" = "Ask anything";
 "composer.button.all_photos" = "All Photos";
 "streaming.code_block.language_fallback" = "plain text";
+"reasoning.title" = "Thinking";
 "transcription.error.recognizer_unavailable" = "Speech recognizer is unavailable.";

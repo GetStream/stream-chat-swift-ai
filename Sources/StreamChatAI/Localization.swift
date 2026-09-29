@@ -17,6 +17,12 @@ enum L10n {
         }
     }
     
+    enum Reasoning {
+        static var title: String {
+            localized("reasoning.title", comment: "Title shown above the model's reasoning while it works on a response.")
+        }
+    }
+    
     enum Transcription {
         static var recognizerUnavailable: String {
             localized("transcription.error.recognizer_unavailable", comment: "Error shown when the speech recognizer cannot be used.")

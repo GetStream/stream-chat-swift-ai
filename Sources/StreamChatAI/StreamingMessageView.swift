@@ -11,8 +11,10 @@ public struct StreamingMessageView: View {
     
     var content: String
     var isGenerating: Bool
+    var reasoning: String?
     
     private let letterInterval: TimeInterval
+    private let colors: Colors
     
     @State private var displayedText: String = ""
     @State private var characterQueue: [Character] = []
@@ -21,17 +23,40 @@ public struct StreamingMessageView: View {
     
     private let supportedChartLanguages = ["json", "chart", "chartjs", "echarts", "highcharts", "vega-lite", "vegalite"]
     
+    /// - Parameters:
+    ///   - content: The message text, rendered as markdown.
+    ///   - isGenerating: Whether the message is still being streamed.
+    ///   - reasoning: The model's reasoning, shown in place of the content until the content starts streaming.
+    ///   - letterInterval: The delay between each animated character.
+    ///   - colors: The palette used for the reasoning.
     public init(
         content: String,
         isGenerating: Bool,
-        letterInterval: TimeInterval = 0.005
+        reasoning: String? = nil,
+        letterInterval: TimeInterval = 0.005,
+        colors: Colors = Colors()
     ) {
         self.content = content
         self.isGenerating = isGenerating
+        self.reasoning = reasoning
         self.letterInterval = letterInterval
+        self.colors = colors
     }
     
     public var body: some View {
+        Group {
+            if let reasoning, !reasoning.isEmpty, content.isEmpty {
+                ReasoningView(text: reasoning, colors: colors)
+                    .transition(.opacity)
+            } else {
+                markdownContent
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: content.isEmpty)
+    }
+    
+    private var markdownContent: some View {
         Markdown(displayedText)
           .markdownBlockStyle(\.codeBlock) { cfg in
               if let language = cfg.language, supportedChartLanguages.contains(language.lowercased()) {

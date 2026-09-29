@@ -46,6 +46,24 @@ StreamingMessageView(
 
 Additionally, you can specify the speed of the animation, with the `letterInterval` parameter. The default value is 0.005 (5ms).
 
+To show the model's reasoning while it works, pass it with the `reasoning` parameter. It's displayed in place of the content until the content starts streaming. With the Stream Chat AI SDK on the backend, the reasoning is available in the message's `reasoning` custom field:
+
+```swift
+StreamingMessageView(
+    content: message.text,
+    isGenerating: message.extraData["generating"]?.boolValue == true,
+    reasoning: message.extraData["reasoning"]?.stringValue
+)
+```
+
+### Reasoning View
+
+The `ReasoningView` renders the model's reasoning as markdown under a "Thinking" title. `StreamingMessageView` uses it automatically, but you can also use it on its own:
+
+```swift
+ReasoningView(text: reasoning)
+```
+
 ### AI Typing Indicator View
 
 The `AITypingIndicatorView` is used to present different states of the LLM, such as "Thinking", "Checking External Sources", etc. You can specify any text you need. There's also a nice animation when the indicator is shown.
@@ -180,7 +198,8 @@ let colors = Colors(
         selectedOptionForeground: .purple
     ),
     suggestions: .init(background: .mint.opacity(0.3)),
-    transcription: .init(icon: .orange)
+    transcription: .init(icon: .orange),
+    reasoning: .init(accent: .purple)
 )
 
 ComposerView(colors: colors) { message in
