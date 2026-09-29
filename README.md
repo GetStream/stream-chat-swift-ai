@@ -89,12 +89,13 @@ These components are designed to work seamlessly with our existing Swift UI [Cha
 
 ### Customizing the Composer with View Factory
 
-`ComposerView` accepts a `viewFactory` parameter of any type that conforms to `ComposerViewFactory`. The protocol exposes four independent slots you can override individually — everything else falls back to the built-in default:
+`ComposerView` accepts a `viewFactory` parameter of any type that conforms to `ComposerViewFactory`. The protocol exposes five independent slots you can override individually — everything else falls back to the built-in default:
 
 | Slot | Factory method | Default |
 |------|----------------|---------|
 | Left of the text field | `makeLeadingComposerView(options:)` | `AddAttachmentsButton` |
 | The text field area | `makeComposerInputView(options:)` | `ComposerInputView` |
+| Inside the text field, while it is empty | `makeComposerInputTrailingView(options:)` | `SpeechToTextButton` |
 | Right of the text field | `makeTrailingComposerView(options:)` | `EmptyView` |
 | Attachment picker sheet | `makeComposerPickerView(options:)` | Built-in photo/camera picker |
 
@@ -138,6 +139,18 @@ class MyComposerFactory: ComposerViewFactory {
             onSend: options.onMessageSend,
             onStop: options.onStopGenerating
         )
+    }
+}
+```
+
+#### Replacing the dictation button
+
+While the text field is empty, `ComposerInputView` shows a `SpeechToTextButton` inside it; once there is text, the send button takes its place. Override `makeComposerInputTrailingView(options:)` to show something else there, or return `EmptyView` to leave dictation out:
+
+```swift
+class MyComposerFactory: ComposerViewFactory {
+    func makeComposerInputTrailingView(options: ComposerInputTrailingViewOptions) -> some View {
+        EmptyView()
     }
 }
 ```

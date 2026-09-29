@@ -6,13 +6,14 @@ import SwiftUI
 
 /// A factory protocol that controls which views are rendered inside ``ComposerView``.
 ///
-/// `ComposerViewFactory` gives you four independent extension points, each backed by
+/// `ComposerViewFactory` gives you five independent extension points, each backed by
 /// a default implementation so you only need to override the slots you want to change:
 ///
 /// | Slot | Default |
 /// |------|---------|
 /// | Leading (left of the input field) | ``AddAttachmentsButton`` |
 /// | Input (the text field area) | ``ComposerInputView`` |
+/// | Input trailing (inside the field, while it is empty) | ``SpeechToTextButton`` |
 /// | Trailing (right of the input field) | `EmptyView` |
 /// | Picker (attachment sheet) | `ComposerPickerView` |
 ///
@@ -40,7 +41,7 @@ import SwiftUI
 /// }
 /// ```
 ///
-/// All four `make*` methods have default implementations provided by the protocol
+/// All five `make*` methods have default implementations provided by the protocol
 /// extension on `ComposerViewFactory`, so conforming types are free to override none,
 /// some, or all of them.
 public protocol ComposerViewFactory {
@@ -73,6 +74,17 @@ public protocol ComposerViewFactory {
     /// - Parameter options: View model, colors, generating state, send and stop callbacks.
     func makeComposerInputView(options: ComposerInputViewOptions) -> ComposerInputViewType
 
+    /// The view type returned by ``makeComposerInputTrailingView(options:)``.
+    associatedtype ComposerInputTrailingViewType: View
+    /// Returns the view rendered inside the text field, after the text, while the field
+    /// is empty and no response is generating. It gives way to the send button once there
+    /// is text, and to the stop button while a response is generating.
+    ///
+    /// The default implementation renders ``SpeechToTextButton``, which dictates into the
+    /// field. Return `EmptyView` to leave dictation out.
+    /// - Parameter options: View model, speech handler, and colors.
+    func makeComposerInputTrailingView(options: ComposerInputTrailingViewOptions) -> ComposerInputTrailingViewType
+
     /// The view type returned by ``makeComposerPickerView(options:)``.
     associatedtype ComposerPickerViewType: View
     /// Returns the view presented in the attachment picker sheet.
@@ -100,9 +112,25 @@ public extension ComposerViewFactory {
             speechHandler: options.speechHandler,
             colors: options.colors,
             isGenerating: options.isGenerating,
+            trailingView: makeComposerInputTrailingView(
+                options: .init(
+                    viewModel: options.viewModel,
+                    speechHandler: options.speechHandler,
+                    colors: options.colors
+                )
+            ),
             onMessageSend: options.onMessageSend,
             onStopGenerating: options.onStopGenerating
         )
+    }
+
+    func makeComposerInputTrailingView(options: ComposerInputTrailingViewOptions) -> some View {
+        SpeechToTextButton(
+            speechHandler: options.speechHandler,
+            colors: options.colors
+        ) { newText in
+            options.viewModel.text = newText
+        }
     }
 
     func makeComposerPickerView(options: ComposerPickerViewOptions) -> some View {
@@ -112,7 +140,7 @@ public extension ComposerViewFactory {
 
 /// The default ``ComposerViewFactory`` used when no custom factory is provided.
 ///
-/// All four factory methods fall through to the protocol-extension defaults,
+/// All five factory methods fall through to the protocol-extension defaults,
 /// producing the standard Stream AI composer appearance. Pass `DefaultViewFactory.shared`
 /// explicitly or omit the `viewFactory` argument on ``ComposerView`` — both are
 /// equivalent.
@@ -153,6 +181,16 @@ public struct ComposerInputViewOptions {
     /// Called when the user taps the stop-generating button. `nil` if stopping is not
     /// supported by the host.
     let onStopGenerating: (() -> Void)?
+}
+
+/// Configuration passed to ``ComposerViewFactory/makeComposerInputTrailingView(options:)``.
+public struct ComposerInputTrailingViewOptions {
+    /// The shared view model; the default dictation button writes its transcript to `text`.
+    public var viewModel: ComposerViewModel
+    /// The shared speech handler owned by ``ComposerView``.
+    public var speechHandler: SpeechHandler
+    /// The color palette in use for the composer.
+    public let colors: Colors
 }
 
 /// Configuration passed to ``ComposerViewFactory/makeComposerPickerView(options:)``.

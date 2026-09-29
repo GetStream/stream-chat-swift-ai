@@ -146,14 +146,17 @@ public struct AddAttachmentsButton: View {
 ///
 /// Override ``ComposerViewFactory/makeComposerInputView(options:)`` to replace this
 /// view with your own implementation while keeping the rest of the composer intact.
-public struct ComposerInputView: View {
-    
+public struct ComposerInputView<TrailingView: View>: View {
+
     @ObservedObject var viewModel: ComposerViewModel
     @ObservedObject var speechHandler: SpeechHandler
 
     private let colors: Colors
 
     var isGenerating: Bool
+
+    /// Shown inside the field while it is empty and nothing is generating.
+    private let trailingView: TrailingView
 
     var onMessageSend: (MessageData) -> Void
     var onStopGenerating: (() -> Void)?
@@ -165,6 +168,7 @@ public struct ComposerInputView: View {
         speechHandler: SpeechHandler,
         colors: Colors,
         isGenerating: Bool,
+        trailingView: TrailingView,
         onMessageSend: @escaping (MessageData) -> Void,
         onStopGenerating: (() -> Void)? = nil
     ) {
@@ -172,6 +176,7 @@ public struct ComposerInputView: View {
         self.speechHandler = speechHandler
         self.colors = colors
         self.isGenerating = isGenerating
+        self.trailingView = trailingView
         self.onMessageSend = onMessageSend
         self.onStopGenerating = onStopGenerating
     }
@@ -222,14 +227,9 @@ public struct ComposerInputView: View {
                     .focused($isFocused)
                 
                 ZStack {
-                    SpeechToTextButton(
-                        speechHandler: speechHandler,
-                        colors: colors
-                    ) { newText in
-                        viewModel.text = newText
-                    }
-                    .fontWeight(.semibold)
-                    .opacity(isGenerating ? 0 : (text.isEmpty ? 1 : 0))
+                    trailingView
+                        .fontWeight(.semibold)
+                        .opacity(isGenerating ? 0 : (text.isEmpty ? 1 : 0))
                     
                     Button {
                         onMessageSend(.init(text: text, attachments: viewModel.attachments, chatOption: viewModel.selectedChatOption))
@@ -275,6 +275,30 @@ public struct ComposerInputView: View {
 
     var text: String {
         viewModel.text
+    }
+}
+
+public extension ComposerInputView where TrailingView == SpeechToTextButton {
+    /// Creates the input with the default ``SpeechToTextButton`` inside the field.
+    init(
+        viewModel: ComposerViewModel,
+        speechHandler: SpeechHandler,
+        colors: Colors,
+        isGenerating: Bool,
+        onMessageSend: @escaping (MessageData) -> Void,
+        onStopGenerating: (() -> Void)? = nil
+    ) {
+        self.init(
+            viewModel: viewModel,
+            speechHandler: speechHandler,
+            colors: colors,
+            isGenerating: isGenerating,
+            trailingView: SpeechToTextButton(speechHandler: speechHandler, colors: colors) { newText in
+                viewModel.text = newText
+            },
+            onMessageSend: onMessageSend,
+            onStopGenerating: onStopGenerating
+        )
     }
 }
 
