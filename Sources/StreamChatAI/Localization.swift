@@ -42,6 +42,24 @@ enum L10n {
         }
     }
     
+    enum ToolCall {
+        static var awaitingClient: String {
+            localized("tool_call.status.awaiting_client", comment: "A tool call waiting for a person's device to run it.")
+        }
+        
+        static var failed: String {
+            localized("tool_call.status.failed", comment: "A tool call that failed, when the agent gave no reason.")
+        }
+        
+        static var cancelled: String {
+            localized("tool_call.status.cancelled", comment: "A tool call that was cancelled.")
+        }
+        
+        static var unsupported: String {
+            localized("ai_part.unsupported", comment: "Placeholder for an AI step this version of the app can't show.")
+        }
+    }
+    
     enum Transcription {
         static var recognizerUnavailable: String {
             localized("transcription.error.recognizer_unavailable", comment: "Error shown when the speech recognizer cannot be used.")

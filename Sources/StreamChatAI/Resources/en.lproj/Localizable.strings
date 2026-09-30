@@ -7,3 +7,7 @@
 "reasoning.title.thought_for" = "Thought for %@";
 "reasoning.accessibility.show" = "Shows the model's reasoning.";
 "reasoning.accessibility.hide" = "Hides the model's reasoning.";
+"tool_call.status.awaiting_client" = "Waiting for the device";
+"tool_call.status.failed" = "Didn't complete";
+"tool_call.status.cancelled" = "Cancelled";
+"ai_part.unsupported" = "A step this app version can't show";

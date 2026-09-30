@@ -10,6 +10,8 @@ To start, this library includes the following components which assist with this 
 - `SpeechToTextButton` - a reusable button that records voice input and streams the recognized transcript back into your UI.
 - `AITypingIndicatorView` - a component that can display different states of the LLM (thinking, checking external sources, etc).
 - `StreamingReasoningView` - a component that shows a model's reasoning while it thinks, then folds it into "Thought for 12s", staying responsive with long, fast-growing reasoning.
+- `AIMessagePartsView` - the steps an agent took while replying (reasoning rounds and tool calls, stored as `ai_reasoning` and `ai_tool_call` attachments), in order.
+- `AIClientToolRunner` - runs the tool calls an agent addresses to this device and sends back their results.
 
 Our team plans to keep iterating and adding more components over time. If there's a component you use every day in your apps and would like to see added, please open an issue and we will try to add it 😎.
 
@@ -70,6 +72,52 @@ StreamingReasoningView(
 Reasoning can run to tens of kilobytes and grow many times a second, so the view only lays out what changes: the collapsed preview renders the last few lines, and the open panel renders one paragraph at a time, lazily, so only the paragraph still being written is laid out again. Blank lines separate paragraphs, and inline Markdown (bold, italics, code, links) is rendered.
 
 You can also pass a `footnote` shown under the open reasoning, `initiallyExpanded`, `maxExpandedHeight` (320 by default), the `font`, and `colors`, whose `reasoning` palette sets the header, text, footnote, shimmer and rule colors.
+
+### Message Parts
+
+An agent can describe each step it takes while replying as a custom attachment on its message: a round of reasoning (`ai_reasoning`) or a tool call (`ai_tool_call`). The order of the attachments is the timeline, and the final answer stays in the message text. `AIMessagePart` decodes them from a message's attachments, and `AIMessagePartsView` shows them in order:
+
+```swift
+let parts = AIMessagePart.parts(from: message.allAttachments.map { ($0.type.rawValue, $0.payload) })
+
+AIMessagePartsView(parts: parts)
+StreamingMessageView(content: message.text, isGenerating: isGenerating)
+```
+
+Decoding is lenient: missing fields get defaults, unknown statuses become `.unknown`, and a step from a newer format (a higher `v`, or an unknown `ai_` type) becomes `.unsupported` and shows a neutral placeholder rather than disappearing. Each step has a stable `id` (a tool call uses the provider's tool-call ID), so the list diffs cleanly while it streams.
+
+A reasoning step carries a capped `preview` and a `summary`. If your backend streams the full reasoning separately, pass a view for reasoning steps:
+
+```swift
+AIMessagePartsView(parts: parts) { step in
+    StreamingReasoningView(part: step, text: fullReasoning[step.id])
+}
+```
+
+`AIToolCallView` shows a single tool call. Both views take `colors`, whose `toolCalls` palette sets the title, detail, accent, success and failure colors.
+
+### Client Tools
+
+A tool call with `executor: client` and `status: awaiting_client` asks a person's device to run a tool. It names the person (`target_user_id`) and the install (`target_client_id`) that should run it, which your backend copies from the custom data (`client_id`) of that person's message. Conform your tools to `AIClientTool` and let an `AIClientToolRunner` run them:
+
+```swift
+final class LocationTool: AIClientTool {
+    let name = "get_location"
+    func run(_ call: AIToolCallPart) async -> AIClientToolResult {
+        // Ask the person first, then:
+        .completed(["city": "Amsterdam"], summary: "Shared approximate location")
+    }
+}
+
+let runner = AIClientToolRunner(userID: currentUserID, clientID: AIClientIdentity.installID, tools: [LocationTool()])
+
+// Whenever a reply's parts change:
+runner.run(parts) { call, result in
+    try await backend.send(result, for: call)
+}
+```
+
+The runner runs a call only when it awaits this person and this install, and only once. A result that could not be sent is sent again on a later update, without running the tool again. Your backend should still accept a result only from the targeted person and install, only while the call is waiting, and only once. Arguments and summaries are visible to every channel member, so keep private data out of them: a summary like "Shared approximate location" rather than the coordinates.
 
 ### Composer View
 

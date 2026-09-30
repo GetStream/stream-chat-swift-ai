@@ -24,6 +24,7 @@ public struct StreamingReasoningView: View {
     var text: String
     var isThinking: Bool
     var duration: TimeInterval?
+    var summary: String?
     var footnote: String?
     var maxExpandedHeight: CGFloat
     var font: Font
@@ -38,6 +39,7 @@ public struct StreamingReasoningView: View {
     ///   - isThinking: Whether the model is still thinking. While it is, the header shimmers
     ///     and, when the view is collapsed, it previews the latest thoughts.
     ///   - duration: How long the model thought, shown as "Thought for 12s" once it is done.
+    ///   - summary: A one-line summary shown beside the header once the model is done.
     ///   - footnote: A note under the open reasoning, such as how long it is kept.
     ///   - initiallyExpanded: Whether the whole reasoning starts open.
     ///   - maxExpandedHeight: How tall the open reasoning grows before it scrolls.
@@ -47,6 +49,7 @@ public struct StreamingReasoningView: View {
         text: String,
         isThinking: Bool,
         duration: TimeInterval? = nil,
+        summary: String? = nil,
         footnote: String? = nil,
         initiallyExpanded: Bool = false,
         maxExpandedHeight: CGFloat = 320,
@@ -56,6 +59,7 @@ public struct StreamingReasoningView: View {
         self.text = text
         self.isThinking = isThinking
         self.duration = duration
+        self.summary = summary
         self.footnote = footnote
         self.maxExpandedHeight = maxExpandedHeight
         self.font = font
@@ -95,6 +99,14 @@ public struct StreamingReasoningView: View {
                 Image(systemName: "brain")
                 Text(title)
                     .modifier(Shimmer(isActive: isThinking, highlight: colors.shimmer))
+                    .layoutPriority(1)
+                if let summary, !isThinking, !isExpanded {
+                    Text(summary)
+                        .fontWeight(.regular)
+                        .foregroundStyle(colors.text.opacity(0.8))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.semibold))
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
@@ -105,7 +117,7 @@ public struct StreamingReasoningView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
+        .accessibilityLabel([title, isThinking ? nil : summary].compactMap { $0 }.joined(separator: ". "))
         .accessibilityHint(isExpanded ? L10n.Reasoning.hideHint : L10n.Reasoning.showHint)
         .accessibilityAddTraits(.isButton)
     }
