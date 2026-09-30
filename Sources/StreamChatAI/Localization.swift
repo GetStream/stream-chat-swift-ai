@@ -17,6 +17,31 @@ enum L10n {
         }
     }
     
+    enum Reasoning {
+        static var thinking: String {
+            localized("reasoning.title.thinking", comment: "Header of a model's reasoning while the model is still thinking.")
+        }
+        
+        static var thought: String {
+            localized("reasoning.title.thought", comment: "Header of a model's finished reasoning when its duration is unknown.")
+        }
+        
+        static func thoughtFor(_ duration: String) -> String {
+            String(
+                format: localized("reasoning.title.thought_for", comment: "Header of a model's finished reasoning. The argument is a duration such as 12s."),
+                duration
+            )
+        }
+        
+        static var showHint: String {
+            localized("reasoning.accessibility.show", comment: "Accessibility hint of the reasoning header while the reasoning is hidden.")
+        }
+        
+        static var hideHint: String {
+            localized("reasoning.accessibility.hide", comment: "Accessibility hint of the reasoning header while the reasoning is shown.")
+        }
+    }
+    
     enum Transcription {
         static var recognizerUnavailable: String {
             localized("transcription.error.recognizer_unavailable", comment: "Error shown when the speech recognizer cannot be used.")

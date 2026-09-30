@@ -2,3 +2,8 @@
 "composer.button.all_photos" = "All Photos";
 "streaming.code_block.language_fallback" = "plain text";
 "transcription.error.recognizer_unavailable" = "Speech recognizer is unavailable.";
+"reasoning.title.thinking" = "Thinking…";
+"reasoning.title.thought" = "Thought process";
+"reasoning.title.thought_for" = "Thought for %@";
+"reasoning.accessibility.show" = "Shows the model's reasoning.";
+"reasoning.accessibility.hide" = "Hides the model's reasoning.";

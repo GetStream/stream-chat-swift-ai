@@ -13,16 +13,20 @@ public class Colors {
     public var suggestions: Suggestions
     /// Appearance configuration for `TranscribeSpeechButton`.
     public var transcription: Transcription
+    /// Appearance configuration for `StreamingReasoningView`.
+    public var reasoning: Reasoning
     
     /// Creates a new palette with optional overrides for each supported view.
     public init(
         composer: Composer = .init(),
         suggestions: Suggestions = .init(),
-        transcription: Transcription = .init()
+        transcription: Transcription = .init(),
+        reasoning: Reasoning = .init()
     ) {
         self.composer = composer
         self.suggestions = suggestions
         self.transcription = transcription
+        self.reasoning = reasoning
     }
 }
 
@@ -86,6 +90,35 @@ public extension Colors {
         /// Creates the transcription palette with optional overrides.
         public init(icon: Color = .gray) {
             self.icon = icon
+        }
+    }
+    
+    /// Palette for a model's reasoning.
+    struct Reasoning {
+        /// Color of the header ("Thinking…", "Thought for 12s") and its icons.
+        public var title: Color
+        /// Color of the reasoning itself.
+        public var text: Color
+        /// Color of the note under the open reasoning.
+        public var footnote: Color
+        /// Color of the highlight that sweeps across the header while the model thinks.
+        public var shimmer: Color
+        /// Color of the rule along the reasoning's leading edge.
+        public var rule: Color
+        
+        /// Creates the reasoning palette with optional overrides.
+        public init(
+            title: Color = .secondary,
+            text: Color = .secondary,
+            footnote: Color = Color(UIColor.tertiaryLabel),
+            shimmer: Color = .primary,
+            rule: Color = Color(UIColor.separator)
+        ) {
+            self.title = title
+            self.text = text
+            self.footnote = footnote
+            self.shimmer = shimmer
+            self.rule = rule
         }
     }
 }

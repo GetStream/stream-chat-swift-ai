@@ -9,6 +9,7 @@ To start, this library includes the following components which assist with this 
 - `ComposerView` - a fully featured prompt composer with attachments, suggestion chips and speech input.
 - `SpeechToTextButton` - a reusable button that records voice input and streams the recognized transcript back into your UI.
 - `AITypingIndicatorView` - a component that can display different states of the LLM (thinking, checking external sources, etc).
+- `StreamingReasoningView` - a component that shows a model's reasoning while it thinks, then folds it into "Thought for 12s", staying responsive with long, fast-growing reasoning.
 
 Our team plans to keep iterating and adding more components over time. If there's a component you use every day in your apps and would like to see added, please open an issue and we will try to add it 😎.
 
@@ -53,6 +54,22 @@ The `AITypingIndicatorView` is used to present different states of the LLM, such
 ```swift
 AITypingIndicatorView(text: "Thinking")
 ```
+
+### Streaming Reasoning View
+
+The `StreamingReasoningView` shows a model's reasoning (its "thinking") alongside its reply. While the model thinks, a shimmering "Thinking…" header sits above a short preview of its latest thoughts. Once it is done, the view folds into "Thought for 12s", and tapping the header opens the whole reasoning in a panel that scrolls, and follows new text while the model is still thinking.
+
+```swift
+StreamingReasoningView(
+    text: reasoning,
+    isThinking: answer.isEmpty,
+    duration: thinkingDuration
+)
+```
+
+Reasoning can run to tens of kilobytes and grow many times a second, so the view only lays out what changes: the collapsed preview renders the last few lines, and the open panel renders one paragraph at a time, lazily, so only the paragraph still being written is laid out again. Blank lines separate paragraphs, and inline Markdown (bold, italics, code, links) is rendered.
+
+You can also pass a `footnote` shown under the open reasoning, `initiallyExpanded`, `maxExpandedHeight` (320 by default), the `font`, and `colors`, whose `reasoning` palette sets the header, text, footnote, shimmer and rule colors.
 
 ### Composer View
 
