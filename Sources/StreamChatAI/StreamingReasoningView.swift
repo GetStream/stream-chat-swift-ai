@@ -34,7 +34,20 @@ public struct StreamingReasoningView: View {
     /// What the reader chose by tapping the header. Until they do, the reasoning is open
     /// while the model thinks and folded once it is done.
     @State private var choice: Bool?
+    /// Whether the reasoning is open. It changes inside an animation, so the whole layout
+    /// around the view glides with it.
+    @State private var open: Bool
+    /// Whether the panel is in the layout. It stays, at no height, while it folds.
+    @State private var mounted: Bool
+    /// How long the model had thought when this view saw it stop, for a header whose
+    /// finished step does not say.
+    @State private var thinkingSince = Date()
+    @State private var thoughtFor: TimeInterval?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// How the reasoning folds and opens. Everything the change moves, such as the reply
+    /// below the reasoning, moves with it; use it for your own changes that should match.
+    public static let foldAnimation = Animation.spring(response: 0.45, dampingFraction: 0.95)
 
     /// Creates a reasoning view.
     /// - Parameters:
@@ -72,21 +85,42 @@ public struct StreamingReasoningView: View {
         self.maxExpandedHeight = maxExpandedHeight
         self.font = font
         self.colors = colors.reasoning
+        let initial = Self.opens(isThinking: isThinking, showsLiveReasoning: showsLiveReasoning, initiallyExpanded: initiallyExpanded)
+        // Live reasoning joins the layout at no height and unfolds once it appears, rather
+        // than pushing everything below it aside in one frame.
+        _open = State(initialValue: initial && !isThinking)
+        _mounted = State(initialValue: initial)
     }
 
-    var isOpen: Bool { choice ?? (isThinking ? showsLiveReasoning : initiallyExpanded) }
+    var isOpen: Bool { open }
+
+    /// Whether the reasoning is open when the reader has not chosen: while the model thinks
+    /// if `showsLiveReasoning`, and once it is done if `initiallyExpanded`.
+    static func opens(isThinking: Bool, showsLiveReasoning: Bool, initiallyExpanded: Bool) -> Bool {
+        isThinking ? showsLiveReasoning : initiallyExpanded
+    }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             header
-            if isOpen && !text.isEmpty {
-                ReasoningPanel(text: text, isLive: isThinking, maxHeight: maxExpandedHeight, color: colors.text)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                if let footnote, !isThinking {
-                    Text(footnote)
-                        .font(.caption2)
-                        .foregroundStyle(colors.footnote)
+            if mounted && !text.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ReasoningPanel(text: text, isLive: isThinking, maxHeight: maxExpandedHeight, color: colors.text)
+                    // Only once the reader opens it: appearing as the reasoning folds by itself
+                    // would push the reply down just as it starts.
+                    if let footnote, !isThinking, choice == true || initiallyExpanded {
+                        Text(footnote)
+                            .font(.caption2)
+                            .foregroundStyle(colors.footnote)
+                    }
                 }
+                .padding(.top, 8)
+                // Folding shrinks the panel in place rather than removing it, so what sits
+                // below glides up with it instead of jumping.
+                .frame(height: open ? nil : 0, alignment: .top)
+                .clipped()
+                .opacity(open ? 1 : 0)
+                .accessibilityHidden(!open)
             }
         }
         .font(font)
@@ -94,14 +128,53 @@ public struct StreamingReasoningView: View {
         .overlay(alignment: .leading) {
             Capsule().fill(isThinking ? colors.shimmer : colors.rule).frame(width: 2)
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isOpen)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isThinking)
+        .onAppear {
+            if mounted && !open && choice == nil { setOpen(true, unfolding: true) }
+        }
+        .modifier(OnChange(value: isThinking) {
+            if isThinking {
+                thinkingSince = Date()
+            } else {
+                thoughtFor = max(duration ?? 0, Date().timeIntervalSince(thinkingSince))
+            }
+            let opens = choice ?? Self.opens(isThinking: isThinking, showsLiveReasoning: showsLiveReasoning, initiallyExpanded: initiallyExpanded)
+            guard !opens else { return setOpen(true) }
+            // Folded in its own animated change, after the update that ended the thinking,
+            // so the whole layout glides with it.
+            DispatchQueue.main.async {
+                if choice == nil && !isThinking { setOpen(false) }
+            }
+        })
+    }
+
+    /// How long the reasoning takes to fold once the model stops thinking. A reply that
+    /// shows its answer only after this lets the reasoning fold first, then types the
+    /// answer below it, rather than the two moving against each other.
+    public static let foldDuration: TimeInterval = 0.45
+
+    /// Opens or folds the reasoning in one animated change of the whole layout. An opening
+    /// panel first joins the layout at no height, so it unfolds rather than appears.
+    private func setOpen(_ value: Bool, unfolding: Bool = false) {
+        guard value != open else { return }
+        let animation = reduceMotion ? nil : Self.foldAnimation
+        if value && (!mounted || unfolding) {
+            mounted = true
+            DispatchQueue.main.async { withAnimation(animation) { open = true } }
+            return
+        }
+        withAnimation(animation) { open = value }
+        if !value {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                if !open { mounted = false }
+            }
+        }
     }
 
     private var header: some View {
-        let title = Self.title(isThinking: isThinking, duration: duration)
+        let title = Self.title(isThinking: isThinking, duration: duration ?? thoughtFor)
         return Button {
-            choice = !isOpen
+            choice = !open
+            setOpen(!open)
         } label: {
             HStack(spacing: 6) {
                 ThinkingIcon(isActive: isThinking)
@@ -229,12 +302,12 @@ struct ReasoningPanel: View {
                 reveal.update(text, animated: false)
                 if isLive { proxy.scrollTo(bottom, anchor: .bottom) }
             }
-            .modifier(OnTextChange(text: text) {
+            .modifier(OnChange(value: text) {
                 reveal.update(text, animated: isLive)
             })
             // The last thoughts can land as the model stops thinking, so new text keeps a
             // reader who is following at the end either way. A finished trace opens at its start.
-            .modifier(OnTextChange(text: reveal.shown) {
+            .modifier(OnChange(value: reveal.shown) {
                 if following { proxy.scrollTo(bottom, anchor: .bottom) }
             })
         }
@@ -364,15 +437,15 @@ private struct FollowsReader: ViewModifier {
     }
 }
 
-private struct OnTextChange: ViewModifier {
-    let text: String
+private struct OnChange<Value: Equatable>: ViewModifier {
+    let value: Value
     let action: () -> Void
 
     func body(content: Content) -> some View {
         if #available(iOS 17.0, *) {
-            content.onChange(of: text) { action() }
+            content.onChange(of: value) { action() }
         } else {
-            content.onChange(of: text) { _ in action() }
+            content.onChange(of: value) { _ in action() }
         }
     }
 }

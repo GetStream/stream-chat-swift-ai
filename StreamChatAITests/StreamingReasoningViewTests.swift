@@ -24,10 +24,13 @@ final class StreamingReasoningViewTests: XCTestCase {
     }
 
     func testTheReasoningIsOpenWhileTheModelThinksAndFoldsWhenItIsDone() {
-        XCTAssertTrue(StreamingReasoningView(text: "x", isThinking: true).isOpen)
-        XCTAssertFalse(StreamingReasoningView(text: "x", isThinking: false).isOpen)
+        XCTAssertTrue(StreamingReasoningView.opens(isThinking: true, showsLiveReasoning: true, initiallyExpanded: false))
+        XCTAssertFalse(StreamingReasoningView.opens(isThinking: false, showsLiveReasoning: true, initiallyExpanded: false))
+        XCTAssertTrue(StreamingReasoningView.opens(isThinking: false, showsLiveReasoning: true, initiallyExpanded: true))
+        XCTAssertFalse(StreamingReasoningView.opens(isThinking: true, showsLiveReasoning: false, initiallyExpanded: false))
+        // Live reasoning starts folded and unfolds once it appears; finished reasoning opens as asked.
+        XCTAssertFalse(StreamingReasoningView(text: "x", isThinking: true).isOpen)
         XCTAssertTrue(StreamingReasoningView(text: "x", isThinking: false, initiallyExpanded: true).isOpen)
-        XCTAssertFalse(StreamingReasoningView(text: "x", isThinking: true, showsLiveReasoning: false).isOpen)
     }
 
     func testTheHeaderCountsTheSecondsWhileThinking() {
