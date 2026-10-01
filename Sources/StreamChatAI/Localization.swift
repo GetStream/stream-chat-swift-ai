@@ -22,6 +22,13 @@ enum L10n {
             localized("reasoning.title.thinking", comment: "Header of a model's reasoning while the model is still thinking.")
         }
         
+        static func thinkingFor(_ duration: String) -> String {
+            String(
+                format: localized("reasoning.title.thinking_for", comment: "Header of a model's reasoning while it thinks. The argument is how long so far, such as 7s."),
+                duration
+            )
+        }
+        
         static var thought: String {
             localized("reasoning.title.thought", comment: "Header of a model's finished reasoning when its duration is unknown.")
         }

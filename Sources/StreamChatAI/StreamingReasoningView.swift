@@ -6,16 +6,15 @@ import SwiftUI
 
 /// A model's reasoning (its "thinking"), shown alongside its reply.
 ///
-/// While the model thinks, a shimmering "Thinking…" header sits above a short preview of
-/// its latest thoughts, fading in at the top. When it is done the view folds into
-/// "Thought for 12s", and tapping the header opens the whole reasoning in a panel that
-/// scrolls once it is taller than `maxExpandedHeight` and follows new text while the model
-/// is still thinking.
+/// While the model thinks, the reasoning is open under a "Thinking… 7s" header: a panel that
+/// grows with the thoughts, up to `maxExpandedHeight`, then keeps the newest in view, revealing
+/// new text smoothly as it arrives. When the model is done the view folds into "Thought for
+/// 12s" and its summary, unless the reader opened or closed it themselves, and tapping the
+/// header opens the whole reasoning again.
 ///
 /// Reasoning can run to tens of kilobytes and grow many times a second, so the view only
-/// lays out what changes: the preview renders the last few lines, and the open panel
-/// splits the text into paragraphs that render lazily, so only the paragraph still being
-/// written is laid out again.
+/// lays out what changes: the text is split into paragraphs that render lazily, and only the
+/// paragraph still being written is laid out again.
 ///
 /// ```swift
 /// StreamingReasoningView(text: reasoning, isThinking: answer.isEmpty, duration: 12)
@@ -26,23 +25,29 @@ public struct StreamingReasoningView: View {
     var duration: TimeInterval?
     var summary: String?
     var footnote: String?
+    var initiallyExpanded: Bool
+    var showsLiveReasoning: Bool
     var maxExpandedHeight: CGFloat
     var font: Font
     var colors: Colors.Reasoning
 
-    @State private var isExpanded: Bool
+    /// What the reader chose by tapping the header. Until they do, the reasoning is open
+    /// while the model thinks and folded once it is done.
+    @State private var choice: Bool?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Creates a reasoning view.
     /// - Parameters:
     ///   - text: The reasoning so far. Blank lines separate paragraphs, and inline Markdown
     ///     (bold, italics, code and links) is rendered.
-    ///   - isThinking: Whether the model is still thinking. While it is, the header shimmers
-    ///     and, when the view is collapsed, it previews the latest thoughts.
-    ///   - duration: How long the model thought, shown as "Thought for 12s" once it is done.
+    ///   - isThinking: Whether the model is still thinking. While it is, the header counts the
+    ///     seconds and the reasoning streams into view.
+    ///   - duration: How long the model has thought, shown as "Thought for 12s" once it is done.
     ///   - summary: A one-line summary shown beside the header once the model is done.
     ///   - footnote: A note under the open reasoning, such as how long it is kept.
-    ///   - initiallyExpanded: Whether the whole reasoning starts open.
-    ///   - maxExpandedHeight: How tall the open reasoning grows before it scrolls.
+    ///   - initiallyExpanded: Whether the reasoning is open once the model is done.
+    ///   - showsLiveReasoning: Whether the reasoning is open while the model thinks.
+    ///   - maxExpandedHeight: How tall the reasoning grows before it scrolls.
     ///   - font: The font of the reasoning. The header uses it in a medium weight.
     ///   - colors: The palette. The view uses its `reasoning` colors.
     public init(
@@ -52,7 +57,8 @@ public struct StreamingReasoningView: View {
         summary: String? = nil,
         footnote: String? = nil,
         initiallyExpanded: Bool = false,
-        maxExpandedHeight: CGFloat = 320,
+        showsLiveReasoning: Bool = true,
+        maxExpandedHeight: CGFloat = 260,
         font: Font = .subheadline,
         colors: Colors = Colors()
     ) {
@@ -61,46 +67,54 @@ public struct StreamingReasoningView: View {
         self.duration = duration
         self.summary = summary
         self.footnote = footnote
+        self.initiallyExpanded = initiallyExpanded
+        self.showsLiveReasoning = showsLiveReasoning
         self.maxExpandedHeight = maxExpandedHeight
         self.font = font
         self.colors = colors.reasoning
-        _isExpanded = State(initialValue: initiallyExpanded)
     }
+
+    var isOpen: Bool { choice ?? (isThinking ? showsLiveReasoning : initiallyExpanded) }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
-            if isExpanded {
-                ReasoningPanel(text: text, isThinking: isThinking, maxHeight: maxExpandedHeight, color: colors.text)
-                if let footnote {
+            if isOpen && !text.isEmpty {
+                ReasoningPanel(text: text, isLive: isThinking, maxHeight: maxExpandedHeight, color: colors.text)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                if let footnote, !isThinking {
                     Text(footnote)
                         .font(.caption2)
                         .foregroundStyle(colors.footnote)
                 }
-            } else if isThinking && !text.isEmpty {
-                ReasoningPreview(text: text, color: colors.text)
             }
         }
         .font(font)
         .padding(.leading, 12)
         .overlay(alignment: .leading) {
-            Capsule().fill(colors.rule).frame(width: 2)
+            Capsule().fill(isThinking ? colors.shimmer : colors.rule).frame(width: 2)
         }
-        .animation(.easeInOut(duration: 0.2), value: isExpanded)
-        .animation(.easeInOut(duration: 0.2), value: isThinking)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isOpen)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isThinking)
     }
 
     private var header: some View {
         let title = Self.title(isThinking: isThinking, duration: duration)
         return Button {
-            isExpanded.toggle()
+            choice = !isOpen
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "brain")
-                Text(title)
-                    .modifier(Shimmer(isActive: isThinking, highlight: colors.shimmer))
-                    .layoutPriority(1)
-                if let summary, !isThinking, !isExpanded {
+                ThinkingIcon(isActive: isThinking)
+                Group {
+                    if isThinking {
+                        ThinkingTitle(duration: duration)
+                    } else {
+                        Text(title)
+                    }
+                }
+                .modifier(Shimmer(isActive: isThinking, highlight: colors.shimmer))
+                .layoutPriority(1)
+                if let summary, !isThinking, !isOpen {
                     Text(summary)
                         .fontWeight(.regular)
                         .foregroundStyle(colors.text.opacity(0.8))
@@ -109,7 +123,7 @@ public struct StreamingReasoningView: View {
                 }
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.semibold))
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .rotationEffect(.degrees(isOpen ? 90 : 0))
             }
             .font(font.weight(.medium))
             .foregroundStyle(colors.title)
@@ -118,7 +132,7 @@ public struct StreamingReasoningView: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([title, isThinking ? nil : summary].compactMap { $0 }.joined(separator: ". "))
-        .accessibilityHint(isExpanded ? L10n.Reasoning.hideHint : L10n.Reasoning.showHint)
+        .accessibilityHint(isOpen ? L10n.Reasoning.hideHint : L10n.Reasoning.showHint)
         .accessibilityAddTraits(.isButton)
     }
 
@@ -126,68 +140,70 @@ public struct StreamingReasoningView: View {
     static func title(isThinking: Bool, duration: TimeInterval?, locale: Locale = .autoupdatingCurrent) -> String {
         if isThinking { return L10n.Reasoning.thinking }
         guard let duration else { return L10n.Reasoning.thought }
-        let seconds = Duration.seconds(max(1, Int(duration.rounded())))
-        return L10n.Reasoning.thoughtFor(seconds.formatted(.units(allowed: [.minutes, .seconds], width: .narrow).locale(locale)))
+        return L10n.Reasoning.thoughtFor(seconds(max(1, duration), locale: locale))
+    }
+
+    /// "Thinking…", then "Thinking… 7s" once a second has passed.
+    static func thinkingTitle(elapsed: TimeInterval, locale: Locale = .autoupdatingCurrent) -> String {
+        guard elapsed >= 1 else { return L10n.Reasoning.thinking }
+        return L10n.Reasoning.thinkingFor(seconds(elapsed, locale: locale))
+    }
+
+    private static func seconds(_ duration: TimeInterval, locale: Locale) -> String {
+        Duration.seconds(Int(duration.rounded(.down)))
+            .formatted(.units(allowed: [.minutes, .seconds], width: .narrow).locale(locale))
     }
 }
 
-/// The latest thoughts in three lines that fade in at the top. Only the end of the text
-/// is laid out, however long the reasoning is.
-struct ReasoningPreview: View {
-    let text: String
-    let color: Color
+/// The header while the model thinks, counting the seconds. A view opened midway counts
+/// from how long the model had already thought.
+struct ThinkingTitle: View {
+    var duration: TimeInterval?
+    @State private var appeared = Date()
 
     var body: some View {
-        // Three hidden lines give the preview its height in whatever font it is shown in.
-        Text(verbatim: "A\nA\nA")
-            .hidden()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .bottomLeading) {
-                Text(Self.tail(of: text))
-                    .foregroundStyle(color)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .clipped()
-            .mask(
-                LinearGradient(
-                    stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.6)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            // It changes several times a second and repeats the reasoning, which the header
-            // opens for assistive technologies.
-            .accessibilityHidden(true)
-    }
-
-    /// The last few hundred characters, starting at a word, with whitespace folded so the
-    /// thoughts read as one stream.
-    static func tail(of text: String, limit: Int = 320) -> String {
-        var start = text.index(text.endIndex, offsetBy: -limit, limitedBy: text.startIndex) ?? text.startIndex
-        if start > text.startIndex, let space = text[start...].firstIndex(where: \.isWhitespace) {
-            start = text.index(after: space)
+        TimelineView(.periodic(from: appeared, by: 1)) { context in
+            Text(StreamingReasoningView.thinkingTitle(elapsed: max(duration ?? 0, context.date.timeIntervalSince(appeared))))
+                .monospacedDigit()
         }
-        return text[start...].split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 }
 
-/// The whole reasoning, one paragraph at a time, scrolling once it is taller than
-/// `maxHeight`.
+/// The brain, pulsing while the model thinks (on systems that animate symbols).
+struct ThinkingIcon: View {
+    var isActive: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if #available(iOS 17.0, *) {
+            Image(systemName: "brain")
+                .symbolEffect(.pulse, options: .repeating, isActive: isActive && !reduceMotion)
+        } else {
+            Image(systemName: "brain")
+        }
+    }
+}
+
+/// The reasoning, one paragraph at a time. It grows with the text up to `maxHeight`, then
+/// scrolls, fading at the top so it reads as continuing above. While the reasoning is live,
+/// new text is revealed smoothly and the newest stays in view unless the reader scrolls up.
 struct ReasoningPanel: View {
     let text: String
-    let isThinking: Bool
+    let isLive: Bool
     let maxHeight: CGFloat
     let color: Color
 
+    @StateObject private var reveal = TextReveal()
     @State private var contentHeight: CGFloat = 0
     @State private var following = true
     private let bottom = "reasoning.bottom"
 
     var body: some View {
+        let overflowing = contentHeight > maxHeight
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
-                    ForEach(ReasoningParagraph.split(text)) { paragraph in
+                    ForEach(ReasoningParagraph.split(reveal.shown)) { paragraph in
                         ReasoningParagraphView(text: paragraph.text, color: color)
                             .equatable()
                     }
@@ -200,17 +216,74 @@ struct ReasoningPanel: View {
                 }
             }
             .frame(height: min(max(contentHeight, 1), maxHeight))
+            .mask(
+                LinearGradient(
+                    stops: [.init(color: overflowing ? .clear : .black, location: 0), .init(color: .black, location: 0.14)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
             .onPreferenceChange(ReasoningHeightKey.self) { contentHeight = $0 }
             .modifier(FollowsReader(following: $following))
             .onAppear {
-                if isThinking { proxy.scrollTo(bottom, anchor: .bottom) }
+                reveal.update(text, animated: false)
+                if isLive { proxy.scrollTo(bottom, anchor: .bottom) }
             }
+            .modifier(OnTextChange(text: text) {
+                reveal.update(text, animated: isLive)
+            })
             // The last thoughts can land as the model stops thinking, so new text keeps a
             // reader who is following at the end either way. A finished trace opens at its start.
-            .modifier(OnTextChange(text: text) {
+            .modifier(OnTextChange(text: reveal.shown) {
                 if following { proxy.scrollTo(bottom, anchor: .bottom) }
             })
         }
+    }
+}
+
+/// Reveals new text a little at a time, so thoughts that arrive in bursts read as a steady
+/// stream. Text that does not carry on from what is shown replaces it at once.
+@MainActor
+final class TextReveal: ObservableObject {
+    @Published private(set) var shown = ""
+    private var target = ""
+    private var pending: [Character] = []
+    private var timer: Timer?
+
+    func update(_ text: String, animated: Bool) {
+        guard animated, text.utf8.count > target.utf8.count, text.utf8.starts(with: target.utf8) else {
+            if text != shown || !pending.isEmpty { show(text) }
+            return
+        }
+        pending.append(contentsOf: String(decoding: text.utf8.dropFirst(target.utf8.count), as: UTF8.self))
+        target = text
+        guard timer == nil else { return }
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] timer in
+            MainActor.assumeIsolated {
+                guard let self else { return timer.invalidate() }
+                self.tick()
+            }
+        }
+    }
+
+    /// Shows a fifth of the backlog at a time: new thoughts arrive about that often.
+    func tick() {
+        guard !pending.isEmpty else {
+            timer?.invalidate()
+            timer = nil
+            return
+        }
+        let count = max(1, pending.count / 6)
+        shown.append(contentsOf: pending.prefix(count))
+        pending.removeFirst(count)
+    }
+
+    private func show(_ text: String) {
+        timer?.invalidate()
+        timer = nil
+        pending = []
+        target = text
+        shown = text
     }
 }
 

@@ -9,7 +9,7 @@ To start, this library includes the following components which assist with this 
 - `ComposerView` - a fully featured prompt composer with attachments, suggestion chips and speech input.
 - `SpeechToTextButton` - a reusable button that records voice input and streams the recognized transcript back into your UI.
 - `AITypingIndicatorView` - a component that can display different states of the LLM (thinking, checking external sources, etc).
-- `StreamingReasoningView` - a component that shows a model's reasoning while it thinks, then folds it into "Thought for 12s", staying responsive with long, fast-growing reasoning.
+- `StreamingReasoningView` - a component that streams a model's reasoning into view while it thinks, then folds it into "Thought for 12s", staying responsive with long, fast-growing reasoning.
 - `AIMessagePartsView` - the steps an agent took while replying (reasoning rounds and tool calls, stored as `ai_reasoning` and `ai_tool_call` attachments), in order.
 - `AIClientToolRunner` - runs the tool calls an agent addresses to this device and sends back their results.
 
@@ -59,7 +59,7 @@ AITypingIndicatorView(text: "Thinking")
 
 ### Streaming Reasoning View
 
-The `StreamingReasoningView` shows a model's reasoning (its "thinking") alongside its reply. While the model thinks, a shimmering "Thinking…" header sits above a short preview of its latest thoughts. Once it is done, the view folds into "Thought for 12s", and tapping the header opens the whole reasoning in a panel that scrolls, and follows new text while the model is still thinking.
+The `StreamingReasoningView` shows a model's reasoning (its "thinking") alongside its reply. While the model thinks, the reasoning is open under a "Thinking… 7s" header: a panel that grows with the thoughts, then keeps the newest in view (unless the reader scrolls up), revealing new text smoothly as it arrives. Once the model is done, the view folds into "Thought for 12s" and the step's summary, unless the reader opened or closed it themselves, and tapping the header opens the whole reasoning again.
 
 ```swift
 StreamingReasoningView(
@@ -69,9 +69,9 @@ StreamingReasoningView(
 )
 ```
 
-Reasoning can run to tens of kilobytes and grow many times a second, so the view only lays out what changes: the collapsed preview renders the last few lines, and the open panel renders one paragraph at a time, lazily, so only the paragraph still being written is laid out again. Blank lines separate paragraphs, and inline Markdown (bold, italics, code, links) is rendered.
+Reasoning can run to tens of kilobytes and grow many times a second, so the view only lays out what changes: it renders one paragraph at a time, lazily, so only the paragraph still being written is laid out again. Blank lines separate paragraphs, and inline Markdown (bold, italics, code, links) is rendered.
 
-You can also pass a `footnote` shown under the open reasoning, `initiallyExpanded`, `maxExpandedHeight` (320 by default), the `font`, and `colors`, whose `reasoning` palette sets the header, text, footnote, shimmer and rule colors.
+You can also pass a `footnote` shown under the finished reasoning, `initiallyExpanded` (open once done), `showsLiveReasoning` (open while thinking, on by default), `maxExpandedHeight` (260 by default), the `font`, and `colors`, whose `reasoning` palette sets the header, text, footnote, shimmer and rule colors.
 
 ### Message Parts
 

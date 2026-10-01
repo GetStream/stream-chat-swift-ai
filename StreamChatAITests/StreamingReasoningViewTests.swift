@@ -23,14 +23,38 @@ final class StreamingReasoningViewTests: XCTestCase {
         XCTAssertEqual(before.last?.id, after.last?.id)
     }
 
-    func testThePreviewStartsAtAWordAndFoldsWhitespace() {
-        let text = String(repeating: "alpha ", count: 100) + "the latest\n\nthought"
-        let tail = ReasoningPreview.tail(of: text, limit: 40)
+    func testTheReasoningIsOpenWhileTheModelThinksAndFoldsWhenItIsDone() {
+        XCTAssertTrue(StreamingReasoningView(text: "x", isThinking: true).isOpen)
+        XCTAssertFalse(StreamingReasoningView(text: "x", isThinking: false).isOpen)
+        XCTAssertTrue(StreamingReasoningView(text: "x", isThinking: false, initiallyExpanded: true).isOpen)
+        XCTAssertFalse(StreamingReasoningView(text: "x", isThinking: true, showsLiveReasoning: false).isOpen)
+    }
 
-        XCTAssertTrue(tail.hasSuffix("the latest thought"))
-        XCTAssertTrue(tail.hasPrefix("alpha"), "the preview began mid-word: \(tail)")
-        XCTAssertLessThanOrEqual(tail.count, 40)
-        XCTAssertEqual(ReasoningPreview.tail(of: "short\nthought"), "short thought")
+    func testTheHeaderCountsTheSecondsWhileThinking() {
+        let locale = Locale(identifier: "en_US")
+
+        XCTAssertEqual(StreamingReasoningView.thinkingTitle(elapsed: 0.4, locale: locale), "Thinking…")
+        XCTAssertEqual(StreamingReasoningView.thinkingTitle(elapsed: 7.6, locale: locale), "Thinking… 7s")
+        XCTAssertEqual(StreamingReasoningView.thinkingTitle(elapsed: 65, locale: locale), "Thinking… 1m 5s")
+    }
+
+    @MainActor
+    func testNewThoughtsAreRevealedSteadily() {
+        let reveal = TextReveal()
+        reveal.update("Weighing", animated: false)
+        XCTAssertEqual(reveal.shown, "Weighing", "what is there when the view opens shows at once")
+
+        reveal.update("Weighing the two options.", animated: true)
+        XCTAssertEqual(reveal.shown, "Weighing", "new thoughts are not dumped in one go")
+        reveal.tick()
+        XCTAssertTrue(reveal.shown.count > "Weighing".count && reveal.shown.count < "Weighing the two options.".count)
+        for _ in 0..<40 { reveal.tick() }
+        XCTAssertEqual(reveal.shown, "Weighing the two options.")
+
+        reveal.update("Something else entirely", animated: true)
+        XCTAssertEqual(reveal.shown, "Something else entirely", "text that does not carry on replaces what is shown")
+        reveal.update("Something else entirely, done", animated: false)
+        XCTAssertEqual(reveal.shown, "Something else entirely, done", "once the model is done the rest shows at once")
     }
 
     func testInlineMarkdownAndHeadingsReadAsText() {
@@ -50,7 +74,7 @@ final class StreamingReasoningViewTests: XCTestCase {
         let locale = Locale(identifier: "en_US")
 
         XCTAssertEqual(StreamingReasoningView.title(isThinking: true, duration: 4, locale: locale), "Thinking…")
-        XCTAssertEqual(StreamingReasoningView.title(isThinking: false, duration: 12.4, locale: locale), "Thought for 12s")
+        XCTAssertEqual(StreamingReasoningView.title(isThinking: false, duration: 12.6, locale: locale), "Thought for 12s")
         XCTAssertEqual(StreamingReasoningView.title(isThinking: false, duration: 65, locale: locale), "Thought for 1m 5s")
         XCTAssertEqual(StreamingReasoningView.title(isThinking: false, duration: 0.2, locale: locale), "Thought for 1s")
         XCTAssertEqual(StreamingReasoningView.title(isThinking: false, duration: nil, locale: locale), "Thought process")
