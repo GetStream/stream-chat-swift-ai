@@ -84,13 +84,19 @@ AIMessagePartsView(parts: parts)
 StreamingMessageView(content: message.text, isGenerating: isGenerating)
 ```
 
-Decoding is lenient: missing fields get defaults, unknown statuses become `.unknown`, and a step from a newer format (a higher `v`, or an unknown `ai_` type) becomes `.unsupported` and shows a neutral placeholder rather than disappearing. Each step has a stable `id` (a tool call uses the provider's tool-call ID), so the list diffs cleanly while it streams.
+The kinds of step are an open set rather than an enum, so a new kind never breaks your code: `part.kind` is a string-backed value (`.reasoning`, `.toolCall`, or any other `ai_` type), the kinds this SDK reads have typed views (`part.reasoning`, `part.toolCall`), and anything else keeps its payload for `part.decode(_:)`. Statuses and executors are open in the same way, so switch over them with a `default`. Decoding is lenient: missing fields get defaults, a field of the wrong type reads as missing, and a step in a newer format version keeps its payload but has no typed view. Each step has a stable `id` (a tool call uses the provider's tool-call ID), so the list diffs cleanly while it streams.
 
-A reasoning step carries a capped `preview` and a `summary`. If your backend streams the full reasoning separately, pass a view for reasoning steps:
+A reasoning step carries a capped `preview` and a `summary`. To show some steps your own way, such as reasoning your backend streams in full, or a kind of your own, render each part yourself and fall back to `AIMessagePartView`:
 
 ```swift
-AIMessagePartsView(parts: parts) { step in
-    StreamingReasoningView(part: step, text: fullReasoning[step.id])
+AIMessagePartsView(parts: parts) { part in
+    if let reasoning = part.reasoning {
+        StreamingReasoningView(part: reasoning, text: fullReasoning[reasoning.id])
+    } else if part.kind == "ai_citation", let citation = try? part.decode(Citation.self) {
+        CitationView(citation: citation)
+    } else {
+        AIMessagePartView(part: part)
+    }
 }
 ```
 

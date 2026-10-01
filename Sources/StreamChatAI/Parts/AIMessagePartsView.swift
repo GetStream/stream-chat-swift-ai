@@ -4,62 +4,76 @@
 
 import SwiftUI
 
-/// The steps an AI agent took while replying, in order: rounds of reasoning, tool calls,
-/// and a neutral placeholder for steps this version can't show. Show it before the reply's
-/// text.
+/// The steps an AI agent took while replying, in order. Show it before the reply's text.
 ///
 /// ```swift
 /// AIMessagePartsView(parts: parts)
 /// ```
 ///
-/// By default a reasoning step shows its preview. An app that streams the full reasoning
-/// separately supplies its own view for reasoning steps:
+/// Each step shows through `AIMessagePartView`: reasoning, tool calls, and a neutral
+/// placeholder for kinds this SDK doesn't know. To show some steps your own way, such as
+/// reasoning you stream separately or a kind of your own, render each part yourself and
+/// fall back to `AIMessagePartView` for the rest:
 ///
 /// ```swift
-/// AIMessagePartsView(parts: parts) { reasoning in
-///     StreamingReasoningView(part: reasoning, text: liveText[reasoning.id])
+/// AIMessagePartsView(parts: parts) { part in
+///     if let reasoning = part.reasoning {
+///         StreamingReasoningView(part: reasoning, text: liveText[reasoning.id])
+///     } else if part.kind == "ai_citation" {
+///         CitationView(part: part)
+///     } else {
+///         AIMessagePartView(part: part)
+///     }
 /// }
 /// ```
-public struct AIMessagePartsView<Reasoning: View>: View {
+public struct AIMessagePartsView<Content: View>: View {
     var parts: [AIMessagePart]
-    var font: Font
-    var colors: Colors
-    var reasoning: (AIReasoningPart) -> Reasoning
+    var content: (AIMessagePart) -> Content
 
-    public init(
-        parts: [AIMessagePart],
-        font: Font = .subheadline,
-        colors: Colors = Colors(),
-        @ViewBuilder reasoning: @escaping (AIReasoningPart) -> Reasoning
-    ) {
+    public init(parts: [AIMessagePart], @ViewBuilder content: @escaping (AIMessagePart) -> Content) {
         self.parts = parts
-        self.font = font
-        self.colors = colors
-        self.reasoning = reasoning
+        self.content = content
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(parts) { part in
-                switch part {
-                case let .reasoning(step):
-                    reasoning(step)
-                case let .toolCall(call):
-                    AIToolCallView(part: call, font: font, colors: colors)
-                case .unsupported:
-                    UnsupportedPartView(font: font, colors: colors.toolCalls)
-                }
+                content(part)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-public extension AIMessagePartsView where Reasoning == StreamingReasoningView {
-    /// Shows each reasoning step with its preview.
+public extension AIMessagePartsView where Content == AIMessagePartView {
+    /// Shows every step with `AIMessagePartView`.
     init(parts: [AIMessagePart], font: Font = .subheadline, colors: Colors = Colors()) {
-        self.init(parts: parts, font: font, colors: colors) { step in
-            StreamingReasoningView(part: step, font: font, colors: colors)
+        self.init(parts: parts) { part in
+            AIMessagePartView(part: part, font: font, colors: colors)
+        }
+    }
+}
+
+/// One step of a reply: a round of reasoning with its preview, a tool call, or a neutral
+/// placeholder for a step this SDK doesn't know.
+public struct AIMessagePartView: View {
+    var part: AIMessagePart
+    var font: Font
+    var colors: Colors
+
+    public init(part: AIMessagePart, font: Font = .subheadline, colors: Colors = Colors()) {
+        self.part = part
+        self.font = font
+        self.colors = colors
+    }
+
+    public var body: some View {
+        if let reasoning = part.reasoning {
+            StreamingReasoningView(part: reasoning, font: font, colors: colors)
+        } else if let call = part.toolCall {
+            AIToolCallView(part: call, font: font, colors: colors)
+        } else {
+            UnsupportedPartView(font: font, colors: colors.toolCalls)
         }
     }
 }
@@ -136,10 +150,9 @@ public struct AIToolCallView: View {
         }
     }
 
+    /// A status this SDK doesn't know reads as still in progress.
     @ViewBuilder private var icon: some View {
         switch part.status {
-        case .running, .unknown:
-            ProgressView().controlSize(.mini).tint(colors.accent)
         case .awaitingClient:
             Image(systemName: "iphone")
                 .foregroundStyle(colors.accent)
@@ -150,6 +163,8 @@ public struct AIToolCallView: View {
             Image(systemName: "exclamationmark").font(.caption.weight(.bold)).foregroundStyle(colors.failure)
         case .cancelled:
             Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(colors.detail)
+        default:
+            ProgressView().controlSize(.mini).tint(colors.accent)
         }
     }
 

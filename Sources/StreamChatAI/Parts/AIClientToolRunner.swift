@@ -90,7 +90,7 @@ public final class AIClientToolRunner {
         _ parts: [AIMessagePart],
         send: @escaping @MainActor (AIToolCallPart, AIClientToolResult) async throws -> Void
     ) {
-        for case let .toolCall(call) in parts where call.isAwaiting(userID: userID, clientID: clientID) {
+        for call in parts.compactMap(\.toolCall) where call.isAwaiting(userID: userID, clientID: clientID) {
             guard let tool = tools[call.name] else { continue }
             var state = calls[call.id] ?? Call()
             guard !state.sending, !state.sent, state.attempts < maxAttempts else { continue }

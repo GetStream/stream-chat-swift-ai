@@ -9,7 +9,7 @@ final class AIMessagePartTests: XCTestCase {
 
     private func payload(_ json: String) -> Data { Data(json.utf8) }
 
-    func testStepsDecodeInOrderAndOtherAttachmentsAreSkipped() {
+    func testStepsDecodeInOrderAndOtherAttachmentsAreSkipped() throws {
         let parts = AIMessagePart.parts(from: [
             ("ai_reasoning", payload(#"{"type":"ai_reasoning","v":1,"id":"r1","status":"completed","summary":"Needs the user's location first","duration_ms":3200}"#)),
             ("athena_image", payload(#"{"artifact_id":"a1"}"#)),
@@ -18,9 +18,11 @@ final class AIMessagePartTests: XCTestCase {
         ])
 
         XCTAssertEqual(parts.map(\.id), ["r1", "toolu_01A", "r2"])
-        guard case let .reasoning(first) = parts[0], case let .toolCall(call) = parts[1], case let .reasoning(live) = parts[2] else {
-            return XCTFail("unexpected parts \(parts)")
-        }
+        XCTAssertEqual(parts.map(\.kind), [.reasoning, .toolCall, .reasoning])
+        let first = try XCTUnwrap(parts[0].reasoning)
+        let call = try XCTUnwrap(parts[1].toolCall)
+        let live = try XCTUnwrap(parts[2].reasoning)
+        XCTAssertNil(parts[0].toolCall)
         XCTAssertEqual(first.status, .completed)
         XCTAssertEqual(first.summary, "Needs the user's location first")
         XCTAssertEqual(first.duration, 3.2)
@@ -36,23 +38,33 @@ final class AIMessagePartTests: XCTestCase {
         XCTAssertEqual(live.preview, "Now that I know the city…")
     }
 
-    func testDecodingIsLenient() {
+    func testNewKindsAndStatusesNeverBreakDecoding() throws {
         let parts = AIMessagePart.parts(from: [
             ("ai_tool_call", payload(#"{"id":"c1","name":"search","status":"paused_for_review","duration_ms":"fast"}"#)),
             ("ai_reasoning", payload("not json")),
             ("ai_tool_call", payload(#"{"id":"c2","v":2,"name":"future"}"#)),
-            ("ai_citation", payload(#"{"id":"s1"}"#)),
+            ("ai_citation", payload(#"{"id":"s1","url":"https://getstream.io","title":"Stream"}"#)),
         ])
 
-        guard case let .toolCall(call) = parts[0] else { return XCTFail("\(parts)") }
-        XCTAssertEqual(call.status, .unknown("paused_for_review"))
+        let call = try XCTUnwrap(parts[0].toolCall)
+        XCTAssertEqual(call.status.rawValue, "paused_for_review", "an unknown status keeps its value")
+        XCTAssertFalse(call.status.isFinished)
         XCTAssertEqual(call.executor, .server)
         XCTAssertNil(call.durationMS, "a field of the wrong type reads as missing")
-        guard case let .reasoning(broken) = parts[1] else { return XCTFail("\(parts)") }
+
+        let broken = try XCTUnwrap(parts[1].reasoning)
         XCTAssertEqual(broken.id, "ai_reasoning-1", "a step without an ID is known by its position")
         XCTAssertEqual(broken.status, .completed)
-        XCTAssertEqual(parts[2], .unsupported(AIUnsupportedPart(id: "c2", type: "ai_tool_call", version: 2)))
-        XCTAssertEqual(parts[3], .unsupported(AIUnsupportedPart(id: "s1", type: "ai_citation", version: 1)))
+
+        XCTAssertEqual(parts[2].kind, .toolCall)
+        XCTAssertEqual(parts[2].version, 2)
+        XCTAssertNil(parts[2].toolCall, "a newer format of a known kind has no typed view")
+        XCTAssertFalse(parts[2].isSupported)
+
+        XCTAssertEqual(parts[3].kind, "ai_citation")
+        XCTAssertFalse(parts[3].isSupported)
+        struct Citation: Decodable { let url: String; let title: String }
+        XCTAssertEqual(try parts[3].decode(Citation.self).title, "Stream", "a kind of your own reads from its payload")
     }
 
     func testAReasoningStepShowsItsLiveTextOrItsPreview() {
@@ -78,7 +90,8 @@ final class AIClientToolRunnerTests: XCTestCase {
     }
 
     private func awaiting(_ id: String = "toolu_01A", user: String = "u_1", client: String = "ios-1", name: String = "athena_device_location") -> [AIMessagePart] {
-        [.toolCall(AIToolCallPart(id: id, name: name, status: .awaitingClient, executor: .client, targetUserID: user, targetClientID: client))]
+        let json = #"{"id":"\#(id)","name":"\#(name)","status":"awaiting_client","executor":"client","target_user_id":"\#(user)","target_client_id":"\#(client)"}"#
+        return [AIMessagePart(type: "ai_tool_call", payload: Data(json.utf8))!]
     }
 
     private func settle() async {
