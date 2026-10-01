@@ -17,6 +17,56 @@ enum L10n {
         }
     }
     
+    enum Reasoning {
+        static var thinking: String {
+            localized("reasoning.title.thinking", comment: "Header of a model's reasoning while the model is still thinking.")
+        }
+        
+        static func thinkingFor(_ duration: String) -> String {
+            String(
+                format: localized("reasoning.title.thinking_for", comment: "Header of a model's reasoning while it thinks. The argument is how long so far, such as 7s."),
+                duration
+            )
+        }
+        
+        static var thought: String {
+            localized("reasoning.title.thought", comment: "Header of a model's finished reasoning when its duration is unknown.")
+        }
+        
+        static func thoughtFor(_ duration: String) -> String {
+            String(
+                format: localized("reasoning.title.thought_for", comment: "Header of a model's finished reasoning. The argument is a duration such as 12s."),
+                duration
+            )
+        }
+        
+        static var showHint: String {
+            localized("reasoning.accessibility.show", comment: "Accessibility hint of the reasoning header while the reasoning is hidden.")
+        }
+        
+        static var hideHint: String {
+            localized("reasoning.accessibility.hide", comment: "Accessibility hint of the reasoning header while the reasoning is shown.")
+        }
+    }
+    
+    enum ToolCall {
+        static var awaitingClient: String {
+            localized("tool_call.status.awaiting_client", comment: "A tool call waiting for a person's device to run it.")
+        }
+        
+        static var failed: String {
+            localized("tool_call.status.failed", comment: "A tool call that failed, when the agent gave no reason.")
+        }
+        
+        static var cancelled: String {
+            localized("tool_call.status.cancelled", comment: "A tool call that was cancelled.")
+        }
+        
+        static var unsupported: String {
+            localized("ai_part.unsupported", comment: "Placeholder for an AI step this version of the app can't show.")
+        }
+    }
+    
     enum Transcription {
         static var recognizerUnavailable: String {
             localized("transcription.error.recognizer_unavailable", comment: "Error shown when the speech recognizer cannot be used.")

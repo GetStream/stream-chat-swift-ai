@@ -13,16 +13,24 @@ public class Colors {
     public var suggestions: Suggestions
     /// Appearance configuration for `TranscribeSpeechButton`.
     public var transcription: Transcription
+    /// Appearance configuration for `StreamingReasoningView`.
+    public var reasoning: Reasoning
+    /// Appearance configuration for `AIToolCallView` and the other steps of `AIMessagePartsView`.
+    public var toolCalls: ToolCalls
     
     /// Creates a new palette with optional overrides for each supported view.
     public init(
         composer: Composer = .init(),
         suggestions: Suggestions = .init(),
-        transcription: Transcription = .init()
+        transcription: Transcription = .init(),
+        reasoning: Reasoning = .init(),
+        toolCalls: ToolCalls = .init()
     ) {
         self.composer = composer
         self.suggestions = suggestions
         self.transcription = transcription
+        self.reasoning = reasoning
+        self.toolCalls = toolCalls
     }
 }
 
@@ -86,6 +94,64 @@ public extension Colors {
         /// Creates the transcription palette with optional overrides.
         public init(icon: Color = .gray) {
             self.icon = icon
+        }
+    }
+    
+    /// Palette for a model's reasoning.
+    struct Reasoning {
+        /// Color of the header ("Thinking…", "Thought for 12s") and its icons.
+        public var title: Color
+        /// Color of the reasoning itself.
+        public var text: Color
+        /// Color of the note under the open reasoning.
+        public var footnote: Color
+        /// Color of the highlight that sweeps across the header while the model thinks.
+        public var shimmer: Color
+        /// Color of the rule along the reasoning's leading edge.
+        public var rule: Color
+        
+        /// Creates the reasoning palette with optional overrides.
+        public init(
+            title: Color = .secondary,
+            text: Color = .secondary,
+            footnote: Color = Color(UIColor.tertiaryLabel),
+            shimmer: Color = .primary,
+            rule: Color = Color(UIColor.separator)
+        ) {
+            self.title = title
+            self.text = text
+            self.footnote = footnote
+            self.shimmer = shimmer
+            self.rule = rule
+        }
+    }
+    
+    /// Palette for an agent's tool calls.
+    struct ToolCalls {
+        /// Color of what a call is doing, such as "Checking your location".
+        public var title: Color
+        /// Color of a call's outcome, its duration and the placeholder for unknown steps.
+        public var detail: Color
+        /// Color of a call in progress, including one waiting for a device.
+        public var accent: Color
+        /// Color of a completed call's check mark.
+        public var success: Color
+        /// Color of a failed call's mark.
+        public var failure: Color
+        
+        /// Creates the tool call palette with optional overrides.
+        public init(
+            title: Color = .primary,
+            detail: Color = .secondary,
+            accent: Color = .accentColor,
+            success: Color = .green,
+            failure: Color = .red
+        ) {
+            self.title = title
+            self.detail = detail
+            self.accent = accent
+            self.success = success
+            self.failure = failure
         }
     }
 }

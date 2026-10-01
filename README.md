@@ -9,6 +9,9 @@ To start, this library includes the following components which assist with this 
 - `ComposerView` - a fully featured prompt composer with attachments, suggestion chips and speech input.
 - `SpeechToTextButton` - a reusable button that records voice input and streams the recognized transcript back into your UI.
 - `AITypingIndicatorView` - a component that can display different states of the LLM (thinking, checking external sources, etc).
+- `StreamingReasoningView` - a component that streams a model's reasoning into view while it thinks, then folds it into "Thought for 12s", staying responsive with long, fast-growing reasoning.
+- `AIMessagePartsView` - the steps an agent took while replying (reasoning rounds and tool calls, stored as `ai_reasoning` and `ai_tool_call` attachments), in order.
+- `AIClientToolRunner` - runs the tool calls an agent addresses to this device and sends back their results.
 
 Our team plans to keep iterating and adding more components over time. If there's a component you use every day in your apps and would like to see added, please open an issue and we will try to add it 😎.
 
@@ -53,6 +56,74 @@ The `AITypingIndicatorView` is used to present different states of the LLM, such
 ```swift
 AITypingIndicatorView(text: "Thinking")
 ```
+
+### Streaming Reasoning View
+
+The `StreamingReasoningView` shows a model's reasoning (its "thinking") alongside its reply. While the model thinks, the reasoning is open under a "Thinking… 7s" header: a panel that grows with the thoughts, then keeps the newest in view (unless the reader scrolls up), revealing new text smoothly as it arrives. Once the model is done, the view folds into "Thought for 12s" and the step's summary, unless the reader opened or closed it themselves, and tapping the header opens the whole reasoning again.
+
+```swift
+StreamingReasoningView(
+    text: reasoning,
+    isThinking: answer.isEmpty,
+    duration: thinkingDuration
+)
+```
+
+Reasoning can run to tens of kilobytes and grow many times a second, so the view only lays out what changes: it renders one paragraph at a time, lazily, so only the paragraph still being written is laid out again. Blank lines separate paragraphs, and inline Markdown (bold, italics, code, links) is rendered.
+
+You can also pass a `footnote` shown under the finished reasoning, `initiallyExpanded` (open once done), `showsLiveReasoning` (open while thinking, on by default), `maxExpandedHeight` (260 by default), the `font`, and `colors`, whose `reasoning` palette sets the header, text, footnote, shimmer and rule colors.
+
+### Message Parts
+
+An agent can describe each step it takes while replying as a custom attachment on its message: a round of reasoning (`ai_reasoning`) or a tool call (`ai_tool_call`). The order of the attachments is the timeline, and the final answer stays in the message text. `AIMessagePart` decodes them from a message's attachments, and `AIMessagePartsView` shows them in order:
+
+```swift
+let parts = AIMessagePart.parts(from: message.allAttachments.map { ($0.type.rawValue, $0.payload) })
+
+AIMessagePartsView(parts: parts)
+StreamingMessageView(content: message.text, isGenerating: isGenerating)
+```
+
+The kinds of step are an open set rather than an enum, so a new kind never breaks your code: `part.kind` is a string-backed value (`.reasoning`, `.toolCall`, or any other `ai_` type), the kinds this SDK reads have typed views (`part.reasoning`, `part.toolCall`), and anything else keeps its payload for `part.decode(_:)`. Statuses and executors are open in the same way, so switch over them with a `default`. Decoding is lenient: missing fields get defaults, a field of the wrong type reads as missing, and a step in a newer format version keeps its payload but has no typed view. Each step has a stable `id` (a tool call uses the provider's tool-call ID), so the list diffs cleanly while it streams.
+
+A reasoning step carries a capped `preview` and a `summary`. To show some steps your own way, such as reasoning your backend streams in full, or a kind of your own, render each part yourself and fall back to `AIMessagePartView`:
+
+```swift
+AIMessagePartsView(parts: parts) { part in
+    if let reasoning = part.reasoning {
+        StreamingReasoningView(part: reasoning, text: fullReasoning[reasoning.id])
+    } else if part.kind == "ai_citation", let citation = try? part.decode(Citation.self) {
+        CitationView(citation: citation)
+    } else {
+        AIMessagePartView(part: part)
+    }
+}
+```
+
+`AIToolCallView` shows a single tool call. Both views take `colors`, whose `toolCalls` palette sets the title, detail, accent, success and failure colors.
+
+### Client Tools
+
+A tool call with `executor: client` and `status: awaiting_client` asks a person's device to run a tool. It names the person (`target_user_id`) and the install (`target_client_id`) that should run it, which your backend copies from the custom data (`client_id`) of that person's message. Conform your tools to `AIClientTool` and let an `AIClientToolRunner` run them:
+
+```swift
+final class LocationTool: AIClientTool {
+    let name = "get_location"
+    func run(_ call: AIToolCallPart) async -> AIClientToolResult {
+        // Ask the person first, then:
+        .completed(["city": "Amsterdam"], summary: "Shared approximate location")
+    }
+}
+
+let runner = AIClientToolRunner(userID: currentUserID, clientID: AIClientIdentity.installID, tools: [LocationTool()])
+
+// Whenever a reply's parts change:
+runner.run(parts) { call, result in
+    try await backend.send(result, for: call)
+}
+```
+
+The runner runs a call only when it awaits this person and this install, and only once. A result that could not be sent is sent again on a later update, without running the tool again. Your backend should still accept a result only from the targeted person and install, only while the call is waiting, and only once. Arguments and summaries are visible to every channel member, so keep private data out of them: a summary like "Shared approximate location" rather than the coordinates.
 
 ### Composer View
 
