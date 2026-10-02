@@ -17,3 +17,16 @@
 "tool_approval.button.allow" = "Allow";
 "tool_approval.button.decline" = "Don't Allow";
 "tool_approval.error.not_sent" = "Your answer couldn't be sent. Try again.";
+"fallback.model.on_device" = "On-device model";
+"fallback.title.on_device" = "Answered on this device";
+"fallback.title.answered_by" = "Answered by %@";
+"fallback.status.answering" = "Answering on this device";
+"fallback.reason.offline" = "You're offline";
+"fallback.reason.limit_reached" = "Usage limit reached";
+"fallback.reason.unavailable" = "The assistant isn't responding";
+"fallback.error.unavailable" = "This model isn't available right now.";
+"fallback.error.context_too_long" = "That's too long for this model. Try a shorter question.";
+"fallback.error.refused" = "This model can't help with that.";
+"fallback.error.unsupported_language" = "This model doesn't support this language yet.";
+"fallback.error.busy" = "This model is busy. Try again in a moment.";
+"fallback.error.failed" = "This model couldn't answer.";

@@ -13,6 +13,7 @@ To start, this library includes the following components which assist with this 
 - `AIMessagePartsView` - the steps an agent took while replying (reasoning rounds and tool calls, stored as `ai_reasoning` and `ai_tool_call` attachments), in order.
 - `AIClientToolRunner` - runs the tool calls an agent addresses to this device and sends back their results.
 - `AIToolApprovalView` - asks the person a tool call waits for whether it may run, such as sharing their location, from the question on its `ai_tool_call` step.
+- `AIModelFallback` - answers with a fallback model, such as Apple's on-device model (`AIOnDeviceModel`), when your agent can't: the person is offline, the agent reached its usage limit, or your backend isn't responding. `AIFallbackReplyView` shows the answer as it streams.
 
 Our team plans to keep iterating and adding more components over time. If there's a component you use every day in your apps and would like to see added, please open an issue and we will try to add it 😎.
 
@@ -161,6 +162,44 @@ AIToolApprovalView(call: call, approver: approver) { approval, state, decide in
 ```
 
 `AIToolApprovalCard` is the default design, and `colors.toolApprovals` sets its title, message, background, border, button and failure colors.
+
+### Fallback Models
+
+When your agent can't answer, a model on the device still can. `AIModelFallback` tries a list of fallback models in order and streams the first available one's answer; `AIOnDeviceModel` is Apple's on-device model (Foundation Models), on iOS 26 and later with Apple Intelligence turned on. It runs without a network connection, and the conversation never leaves the device.
+
+```swift
+let fallback = AIModelFallback(
+    models: [AIOnDeviceModel()],
+    instructions: "You are Ava, answering on the person's phone because the assistant can't be reached. You have no tools, files or memory: never say you looked something up or did something."
+)
+
+do {
+    try await backend.send(text, id: messageID)
+} catch {
+    if let reason = fallback.policy.reason(for: error),
+       let reply = fallback.reply(id: messageID, to: history + [.user(text)], reason: reason) {
+        fallbackReplies.append(reply)
+    }
+}
+
+// In your message list:
+AIFallbackReplyView(reply: reply)
+```
+
+`AIFallbackPolicy` decides which failures fall back. It reads URL errors itself (no connection is `offline`; a host it can't reach, or a request that timed out, is `unavailable`), and you teach it your backend's errors, which it asks first. `AIFallbackPolicy.reason(forHTTPStatus:)` reads 429 as `limitReached` and 502–504 as `unavailable`:
+
+```swift
+fallback.policy = AIFallbackPolicy { error in
+    guard let error = error as? BackendError else { return nil }
+    return error.code == "usage_limit_reached" ? .limitReached : AIFallbackPolicy.reason(forHTTPStatus: error.status)
+}
+```
+
+Remove a reason from `policy.reasons` to show the error instead. Fall back only when your agent did not take the request, or when sending it again is safe: a request that timed out may still have reached your agent, so give each one an ID your backend deduplicates. Stream Chat keeps a message sent offline and sends it once the device is back online, so such a send never fails: check `AINetworkMonitor.shared.isOnline` to answer it on the device right away.
+
+A fallback answer isn't sent to the channel, and your agent never sees it: keep it on the device, or send it yourself. `AIFallbackReply` is observable: `text` grows as the model writes, and `state` ends `completed`, `failed` (with an `AIFallbackModelError` that reads well to people) or `cancelled`. Show your own design with `AIFallbackLabel`, which says where the answer came from and why ("Answered on this device · You're offline"), and the reply's text; `colors.fallback` sets its colors.
+
+The on-device model is small, with a context of a few thousand tokens: good for short answers, drafting and summarising what is in the conversation, not for facts it would have to look up. The oldest turns of a longer conversation are left out. To answer with another model, such as one you ship with the app or a second backend, conform it to `AIFallbackModel` and list it in `models`; one with `requiresNetwork` is skipped while the device is offline.
 
 ### Composer View
 

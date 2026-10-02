@@ -19,6 +19,8 @@ public class Colors {
     public var toolCalls: ToolCalls
     /// Appearance configuration for `AIToolApprovalView`, the question a client tool asks before it runs.
     public var toolApprovals: ToolApprovals
+    /// Appearance configuration for `AIFallbackLabel` and `AIFallbackReplyView`, an answer from a fallback model.
+    public var fallback: Fallback
     
     /// Creates a new palette with optional overrides for each supported view.
     public init(
@@ -27,7 +29,8 @@ public class Colors {
         transcription: Transcription = .init(),
         reasoning: Reasoning = .init(),
         toolCalls: ToolCalls = .init(),
-        toolApprovals: ToolApprovals = .init()
+        toolApprovals: ToolApprovals = .init(),
+        fallback: Fallback = .init()
     ) {
         self.composer = composer
         self.suggestions = suggestions
@@ -35,6 +38,7 @@ public class Colors {
         self.reasoning = reasoning
         self.toolCalls = toolCalls
         self.toolApprovals = toolApprovals
+        self.fallback = fallback
     }
 }
 
@@ -188,6 +192,31 @@ public extension Colors {
             self.background = background
             self.border = border
             self.accent = accent
+            self.failure = failure
+        }
+    }
+    
+    /// Palette for an answer from a fallback model.
+    struct Fallback {
+        /// Color of the icon that shows where the answer came from.
+        public var icon: Color
+        /// Color of where the answer came from, such as "Answered on this device".
+        public var title: Color
+        /// Color of why, such as "You're offline".
+        public var detail: Color
+        /// Color of the note when the model couldn't answer.
+        public var failure: Color
+        
+        /// Creates the fallback palette with optional overrides.
+        public init(
+            icon: Color = .secondary,
+            title: Color = .secondary,
+            detail: Color = Color(UIColor.tertiaryLabel),
+            failure: Color = .red
+        ) {
+            self.icon = icon
+            self.title = title
+            self.detail = detail
             self.failure = failure
         }
     }

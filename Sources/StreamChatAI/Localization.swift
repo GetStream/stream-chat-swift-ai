@@ -89,6 +89,63 @@ enum L10n {
         }
     }
     
+    enum Fallback {
+        static var onDeviceModel: String {
+            localized("fallback.model.on_device", comment: "Name of Apple's on-device language model, which answers when the AI agent can't.")
+        }
+        
+        static var answeredOnDevice: String {
+            localized("fallback.title.on_device", comment: "Label of an answer written by a model on this device, because the AI agent couldn't answer.")
+        }
+        
+        static func answeredBy(_ model: String) -> String {
+            String(
+                format: localized("fallback.title.answered_by", comment: "Label of an answer written by another model, because the AI agent couldn't answer. The argument is the model's name."),
+                model
+            )
+        }
+        
+        static var answering: String {
+            localized("fallback.status.answering", comment: "Shown while a fallback model starts writing its answer.")
+        }
+        
+        static var reasonOffline: String {
+            localized("fallback.reason.offline", comment: "Why a fallback model answered: the device has no network connection.")
+        }
+        
+        static var reasonLimitReached: String {
+            localized("fallback.reason.limit_reached", comment: "Why a fallback model answered: the AI agent's usage limit was reached.")
+        }
+        
+        static var reasonUnavailable: String {
+            localized("fallback.reason.unavailable", comment: "Why a fallback model answered: the AI agent isn't responding.")
+        }
+        
+        static var errorUnavailable: String {
+            localized("fallback.error.unavailable", comment: "A fallback model couldn't answer because it isn't available on this device now.")
+        }
+        
+        static var errorContextTooLong: String {
+            localized("fallback.error.context_too_long", comment: "A fallback model couldn't answer because the question is too long for it.")
+        }
+        
+        static var errorRefused: String {
+            localized("fallback.error.refused", comment: "A fallback model declined to answer, or its safety checks stopped the answer.")
+        }
+        
+        static var errorUnsupportedLanguage: String {
+            localized("fallback.error.unsupported_language", comment: "A fallback model couldn't answer because it doesn't support the conversation's language.")
+        }
+        
+        static var errorBusy: String {
+            localized("fallback.error.busy", comment: "A fallback model couldn't answer because it is busy.")
+        }
+        
+        static var errorFailed: String {
+            localized("fallback.error.failed", comment: "A fallback model couldn't answer, for any other reason.")
+        }
+    }
+    
     enum Transcription {
         static var recognizerUnavailable: String {
             localized("transcription.error.recognizer_unavailable", comment: "Error shown when the speech recognizer cannot be used.")
