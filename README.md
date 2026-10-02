@@ -13,6 +13,7 @@ To start, this library includes the following components which assist with this 
 - `AIMessagePartsView` - the steps an agent took while replying (reasoning rounds and tool calls, stored as `ai_reasoning` and `ai_tool_call` attachments), in order.
 - `AIClientToolRunner` - runs the tool calls an agent addresses to this device and sends back their results.
 - `AIToolApprovalView` - asks the person a tool call waits for whether it may run, such as sharing their location, from the question on its `ai_tool_call` step.
+- `AIOnDeviceModel` - Apple's on-device model, for answering when your agent can't: the person is offline, or the agent reached its usage limit.
 
 Our team plans to keep iterating and adding more components over time. If there's a component you use every day in your apps and would like to see added, please open an issue and we will try to add it 😎.
 
@@ -161,6 +162,25 @@ AIToolApprovalView(call: call, approver: approver) { approval, state, decide in
 ```
 
 `AIToolApprovalCard` is the default design, and `colors.toolApprovals` sets its title, message, background, border, button and failure colors.
+
+### Local Models
+
+When your agent can't answer, because the person is offline or the agent reached its usage limit, a model on the device still can. `AIOnDeviceModel` is Apple's on-device model (Foundation Models), on iOS 26 and later with Apple Intelligence turned on; the conversation never leaves the device. It streams the answer, each element the whole answer so far:
+
+```swift
+let model = AIOnDeviceModel()
+
+do {
+    try await backend.send(text)
+} catch let error as URLError where error.code == .notConnectedToInternet {
+    guard model.isAvailable else { throw error }
+    for try await answer in model.reply(instructions: "Answer briefly. You have no tools.", turns: history + [.user(text)]) {
+        localAnswer = answer
+    }
+}
+```
+
+It is a small model with a context of a few thousand tokens, so the oldest turns of a long conversation are left out. Tell it in the instructions what it can't do, since it has none of your agent's tools. Its answer isn't sent to the channel; keep it on the device or send it yourself. To use another model, conform it to `AILocalModel`.
 
 ### Composer View
 
