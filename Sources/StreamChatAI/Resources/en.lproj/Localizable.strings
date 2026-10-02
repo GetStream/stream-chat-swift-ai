@@ -9,6 +9,11 @@
 "reasoning.accessibility.show" = "Shows the model's reasoning.";
 "reasoning.accessibility.hide" = "Hides the model's reasoning.";
 "tool_call.status.awaiting_client" = "Waiting for the device";
+"tool_call.status.awaiting_approval" = "Waiting for approval";
+"tool_call.status.declined" = "Declined";
 "tool_call.status.failed" = "Didn't complete";
 "tool_call.status.cancelled" = "Cancelled";
 "ai_part.unsupported" = "A step this app version can't show";
+"tool_approval.button.allow" = "Allow";
+"tool_approval.button.decline" = "Don't Allow";
+"tool_approval.error.not_sent" = "Your answer couldn't be sent. Try again.";

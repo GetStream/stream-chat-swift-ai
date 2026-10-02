@@ -7,11 +7,12 @@ import SwiftUI
 /// The steps an AI agent took while replying, in order. Show it before the reply's text.
 ///
 /// ```swift
-/// AIMessagePartsView(parts: parts)
+/// AIMessagePartsView(parts: parts, approver: approver)
 /// ```
 ///
 /// Each step shows through `AIMessagePartView`: reasoning, tool calls, and a neutral
-/// placeholder for kinds this SDK doesn't know. To show some steps your own way, such as
+/// placeholder for kinds this SDK doesn't know. With an `AIToolApprover`, a call waiting
+/// for this person's approval shows its question under it. To show some steps your own way, such as
 /// reasoning you stream separately or a kind of your own, render each part yourself and
 /// fall back to `AIMessagePartView` for the rest:
 ///
@@ -47,22 +48,26 @@ public struct AIMessagePartsView<Content: View>: View {
 
 public extension AIMessagePartsView where Content == AIMessagePartView {
     /// Shows every step with `AIMessagePartView`.
-    init(parts: [AIMessagePart], font: Font = .subheadline, colors: Colors = Colors()) {
+    /// - Parameter approver: Who answers calls' questions on this device, to ask them.
+    init(parts: [AIMessagePart], approver: AIToolApprover? = nil, font: Font = .subheadline, colors: Colors = Colors()) {
         self.init(parts: parts) { part in
-            AIMessagePartView(part: part, font: font, colors: colors)
+            AIMessagePartView(part: part, approver: approver, font: font, colors: colors)
         }
     }
 }
 
-/// One step of a reply: a round of reasoning with its preview, a tool call, or a neutral
-/// placeholder for a step this SDK doesn't know.
+/// One step of a reply: a round of reasoning with its preview, a tool call (with its
+/// question, when it waits for the approver), or a neutral placeholder for a step this SDK
+/// doesn't know.
 public struct AIMessagePartView: View {
     var part: AIMessagePart
+    var approver: AIToolApprover?
     var font: Font
     var colors: Colors
 
-    public init(part: AIMessagePart, font: Font = .subheadline, colors: Colors = Colors()) {
+    public init(part: AIMessagePart, approver: AIToolApprover? = nil, font: Font = .subheadline, colors: Colors = Colors()) {
         self.part = part
+        self.approver = approver
         self.font = font
         self.colors = colors
     }
@@ -71,7 +76,12 @@ public struct AIMessagePartView: View {
         if let reasoning = part.reasoning {
             StreamingReasoningView(part: reasoning, font: font, colors: colors)
         } else if let call = part.toolCall {
-            AIToolCallView(part: call, font: font, colors: colors)
+            VStack(alignment: .leading, spacing: 8) {
+                AIToolCallView(part: call, font: font, colors: colors)
+                if let approver {
+                    AIToolApprovalView(call: call, approver: approver, font: font, colors: colors)
+                }
+            }
         } else {
             UnsupportedPartView(font: font, colors: colors.toolCalls)
         }
@@ -142,7 +152,11 @@ public struct AIToolCallView: View {
     }
 
     private var detail: String? {
-        switch part.status {
+        if part.isDeclined {
+            return part.summary ?? L10n.ToolCall.declined
+        }
+        return switch part.status {
+        case .awaitingApproval: part.summary ?? L10n.ToolCall.awaitingApproval
         case .awaitingClient: part.summary ?? L10n.ToolCall.awaitingClient
         case .failed: part.summary ?? L10n.ToolCall.failed
         case .cancelled: part.summary ?? L10n.ToolCall.cancelled
@@ -153,6 +167,10 @@ public struct AIToolCallView: View {
     /// A status this SDK doesn't know reads as still in progress.
     @ViewBuilder private var icon: some View {
         switch part.status {
+        case .awaitingApproval:
+            Image(systemName: "hand.raised")
+                .foregroundStyle(colors.accent)
+                .modifier(Shimmer(isActive: true, highlight: colors.title))
         case .awaitingClient:
             Image(systemName: "iphone")
                 .foregroundStyle(colors.accent)

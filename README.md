@@ -12,6 +12,7 @@ To start, this library includes the following components which assist with this 
 - `StreamingReasoningView` - a component that streams a model's reasoning into view while it thinks, then folds it into "Thought for 12s", staying responsive with long, fast-growing reasoning.
 - `AIMessagePartsView` - the steps an agent took while replying (reasoning rounds and tool calls, stored as `ai_reasoning` and `ai_tool_call` attachments), in order.
 - `AIClientToolRunner` - runs the tool calls an agent addresses to this device and sends back their results.
+- `AIToolApprovalView` - asks the person a tool call waits for whether it may run, such as sharing their location, from the question on its `ai_tool_call` step.
 
 Our team plans to keep iterating and adding more components over time. If there's a component you use every day in your apps and would like to see added, please open an issue and we will try to add it 😎.
 
@@ -124,6 +125,42 @@ runner.run(parts) { call, result in
 ```
 
 The runner runs a call only when it awaits this person and this install, and only once. A result that could not be sent is sent again on a later update, without running the tool again. Your backend should still accept a result only from the targeted person and install, only while the call is waiting, and only once. Arguments and summaries are visible to every channel member, so keep private data out of them: a summary like "Shared approximate location" rather than the coordinates.
+
+### Tool Approvals
+
+Some tool calls should wait for a person: the agent wants their location, or to send an email on their behalf. The agent's backend marks such a call on its `ai_tool_call` step with status `awaiting_approval`, addresses it to that person (`target_user_id`, and `target_client_id` for a client tool), and adds the question:
+
+```json
+{ "type": "ai_tool_call", "id": "toolu_01A", "name": "get_location", "status": "awaiting_approval",
+  "executor": "client", "target_user_id": "u_123", "target_client_id": "ios-7F3A",
+  "approval": { "title": "Share your location?", "message": "Only your city is shared.",
+                "reason": "to check the local weather", "allow_title": "Share location", "decline_title": "Don't share" } }
+```
+
+`part.toolCall?.approval` reads it, and `AIToolApprovalView` asks it under the call. It shows only to that person, on the install the call names (any of their devices for a server tool), and only while the call waits. Give it an `AIToolApprover`, which says who is signed in on this device and sends their answer to your backend:
+
+```swift
+let approver = AIToolApprover(userID: currentUserID, clientID: AIClientIdentity.installID) { call, allowed in
+    try await backend.answer(call, allowed: allowed)
+}
+
+AIToolCallView(part: call)
+AIToolApprovalView(call: call, approver: approver)
+```
+
+`AIMessagePartsView(parts: parts, approver: approver)` does this for every tool call. While the answer is on its way the buttons are disabled; if `decide` throws, the person can answer again.
+
+The backend holds the call until it gets the answer, and accepts one only from the targeted person (and install), only while the call waits, and only once. It then updates the step: allowed, the call goes on (`approval.decision` is `allowed`, and a client tool's call moves to `awaiting_client`, so `AIClientToolRunner` runs it); declined, the call is `cancelled` with `approval.decision` `declined` and never runs. `part.isDeclined` tells the two cancellations apart, and `AIToolCallView` shows "Waiting for approval" and "Declined". The question is visible to every channel member, so keep private data out of it.
+
+To ask in your own design, pass the content: it gets the question, where the answer is, and a closure that answers.
+
+```swift
+AIToolApprovalView(call: call, approver: approver) { approval, state, decide in
+    MyApprovalCard(title: approval.title, busy: state.isSending, onAllow: { decide(true) }, onDecline: { decide(false) })
+}
+```
+
+`AIToolApprovalCard` is the default design, and `colors.toolApprovals` sets its title, message, background, border, button and failure colors.
 
 ### Composer View
 

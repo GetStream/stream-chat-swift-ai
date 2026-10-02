@@ -13,7 +13,8 @@ import Foundation
 public protocol AIClientTool: AnyObject {
     /// The tool's name, as the agent declared it.
     var name: String { get }
-    /// Runs one call. Ask the person first when the tool reads something private.
+    /// Runs one call. A call whose tool asks the person first reaches the device only once
+    /// they allowed it, through `AIToolApprovalView`.
     func run(_ call: AIToolCallPart) async -> AIClientToolResult
 }
 
