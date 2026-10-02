@@ -54,6 +54,14 @@ enum L10n {
             localized("tool_call.status.awaiting_client", comment: "A tool call waiting for a person's device to run it.")
         }
         
+        static var awaitingApproval: String {
+            localized("tool_call.status.awaiting_approval", comment: "A tool call waiting for a person to allow or decline it.")
+        }
+        
+        static var declined: String {
+            localized("tool_call.status.declined", comment: "A tool call the person declined, so it never ran.")
+        }
+        
         static var failed: String {
             localized("tool_call.status.failed", comment: "A tool call that failed, when the agent gave no reason.")
         }
@@ -64,6 +72,20 @@ enum L10n {
         
         static var unsupported: String {
             localized("ai_part.unsupported", comment: "Placeholder for an AI step this version of the app can't show.")
+        }
+    }
+    
+    enum ToolApproval {
+        static var allow: String {
+            localized("tool_approval.button.allow", comment: "Button that allows a tool call the AI agent asked to make.")
+        }
+        
+        static var decline: String {
+            localized("tool_approval.button.decline", comment: "Button that declines a tool call the AI agent asked to make, so it never runs.")
+        }
+        
+        static var notSent: String {
+            localized("tool_approval.error.not_sent", comment: "Shown under a tool call's question when the person's answer could not be sent.")
         }
     }
     

@@ -17,6 +17,8 @@ public class Colors {
     public var reasoning: Reasoning
     /// Appearance configuration for `AIToolCallView` and the other steps of `AIMessagePartsView`.
     public var toolCalls: ToolCalls
+    /// Appearance configuration for `AIToolApprovalView`, the question a client tool asks before it runs.
+    public var toolApprovals: ToolApprovals
     
     /// Creates a new palette with optional overrides for each supported view.
     public init(
@@ -24,13 +26,15 @@ public class Colors {
         suggestions: Suggestions = .init(),
         transcription: Transcription = .init(),
         reasoning: Reasoning = .init(),
-        toolCalls: ToolCalls = .init()
+        toolCalls: ToolCalls = .init(),
+        toolApprovals: ToolApprovals = .init()
     ) {
         self.composer = composer
         self.suggestions = suggestions
         self.transcription = transcription
         self.reasoning = reasoning
         self.toolCalls = toolCalls
+        self.toolApprovals = toolApprovals
     }
 }
 
@@ -151,6 +155,39 @@ public extension Colors {
             self.detail = detail
             self.accent = accent
             self.success = success
+            self.failure = failure
+        }
+    }
+    
+    /// Palette for the question a client tool asks before it runs.
+    struct ToolApprovals {
+        /// Color of the question, such as "Share your location?".
+        public var title: Color
+        /// Color of the agent's reason and what allowing it shares.
+        public var message: Color
+        /// Background of the question's card.
+        public var background: Color
+        /// Border of the question's card.
+        public var border: Color
+        /// Tint of the buttons that allow or decline the call.
+        public var accent: Color
+        /// Color of the note when an answer could not be sent.
+        public var failure: Color
+        
+        /// Creates the tool approval palette with optional overrides.
+        public init(
+            title: Color = .primary,
+            message: Color = .secondary,
+            background: Color = Color(UIColor.secondarySystemBackground),
+            border: Color = Color(UIColor.separator),
+            accent: Color = .accentColor,
+            failure: Color = .red
+        ) {
+            self.title = title
+            self.message = message
+            self.background = background
+            self.border = border
+            self.accent = accent
             self.failure = failure
         }
     }

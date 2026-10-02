@@ -161,6 +161,9 @@ public struct AIToolCallPart: Identifiable, Equatable, Sendable {
         public var description: String { rawValue }
 
         public static let running: Status = "running"
+        /// Waiting for the targeted person to allow or decline the call. Its `approval` says
+        /// what to ask them.
+        public static let awaitingApproval: Status = "awaiting_approval"
         /// Waiting for the targeted device to run the tool and send its result.
         public static let awaitingClient: Status = "awaiting_client"
         public static let completed: Status = "completed"
@@ -205,8 +208,14 @@ public struct AIToolCallPart: Identifiable, Equatable, Sendable {
     /// A short, shareable outcome, such as "Found your location".
     public var summary: String?
     public var durationMS: Int?
+    /// What the call asks the person it waits for before it runs, and how they answered,
+    /// when its tool asks first.
+    public var approval: AIToolApproval?
 
     public var duration: TimeInterval? { durationMS.map { TimeInterval($0) / 1000 } }
+
+    /// Whether the person declined the call, so it never ran.
+    public var isDeclined: Bool { approval?.decision == .declined }
 
     public init(
         id: String,
@@ -218,7 +227,8 @@ public struct AIToolCallPart: Identifiable, Equatable, Sendable {
         targetClientID: String? = nil,
         arguments: Data? = nil,
         summary: String? = nil,
-        durationMS: Int? = nil
+        durationMS: Int? = nil,
+        approval: AIToolApproval? = nil
     ) {
         self.id = id
         self.name = name
@@ -230,6 +240,7 @@ public struct AIToolCallPart: Identifiable, Equatable, Sendable {
         self.arguments = arguments
         self.summary = summary
         self.durationMS = durationMS
+        self.approval = approval
     }
 
     init(id: String, _ fields: Fields) {
@@ -243,7 +254,8 @@ public struct AIToolCallPart: Identifiable, Equatable, Sendable {
             targetClientID: fields.string("target_client_id"),
             arguments: fields.json("arguments"),
             summary: fields.string("summary"),
-            durationMS: fields.int("duration_ms")
+            durationMS: fields.int("duration_ms"),
+            approval: fields.fields("approval").flatMap(AIToolApproval.init)
         )
     }
 
@@ -253,9 +265,81 @@ public struct AIToolCallPart: Identifiable, Equatable, Sendable {
         executor == .client && status == .awaitingClient && targetUserID == userID && targetClientID == clientID
     }
 
+    /// Whether this call is waiting for this person to allow it, on this device: still
+    /// awaiting approval, targeted at this person, and at this install when it names one
+    /// (a client tool does; a server tool's question may be answered from any of their
+    /// devices).
+    public func isAwaitingApproval(userID: String, clientID: String) -> Bool {
+        status == .awaitingApproval && approval != nil && targetUserID == userID
+            && (targetClientID == nil || targetClientID == clientID)
+    }
+
     /// Decodes the arguments into a type of your own.
     public func decodeArguments<T: Decodable>(as type: T.Type = T.self) throws -> T {
         try JSONDecoder().decode(T.self, from: arguments ?? Data("{}".utf8))
+    }
+}
+
+/// What a tool call asks the person it waits for before it runs, such as "Share your
+/// location?", and how they answered.
+///
+/// The agent's backend writes it on the call's `ai_tool_call` step, which waits with status
+/// `awaiting_approval`, and holds the call until the person answers. Allowed, the call goes
+/// on (a client tool then awaits the device); declined, it is cancelled and never runs.
+public struct AIToolApproval: Equatable, Sendable {
+    /// How the person answered. An open set: compare against the decisions you know.
+    public struct Decision: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral, CustomStringConvertible {
+        public let rawValue: String
+
+        public init(rawValue: String) { self.rawValue = rawValue }
+        public init(stringLiteral value: String) { rawValue = value }
+        public var description: String { rawValue }
+
+        public static let allowed: Decision = "allowed"
+        public static let declined: Decision = "declined"
+    }
+
+    /// The question, such as "Share your location?".
+    public var title: String
+    /// What allowing it shares or does, such as "Only your city is shared."
+    public var message: String?
+    /// The agent's own words for why it wants the call, such as "to check the local
+    /// weather".
+    public var reason: String?
+    /// The label of the button that allows the call. Defaults to "Allow".
+    public var allowTitle: String
+    /// The label of the button that declines it. Defaults to "Don't Allow".
+    public var declineTitle: String
+    /// How the person answered, once they did.
+    public var decision: Decision?
+
+    public init(
+        title: String,
+        message: String? = nil,
+        reason: String? = nil,
+        allowTitle: String? = nil,
+        declineTitle: String? = nil,
+        decision: Decision? = nil
+    ) {
+        self.title = title
+        self.message = message
+        self.reason = reason
+        self.allowTitle = allowTitle ?? L10n.ToolApproval.allow
+        self.declineTitle = declineTitle ?? L10n.ToolApproval.decline
+        self.decision = decision
+    }
+
+    /// Reads the step's `approval`. A question with no title asks nothing.
+    init?(_ fields: Fields) {
+        guard let title = fields.string("title") else { return nil }
+        self.init(
+            title: title,
+            message: fields.string("message"),
+            reason: fields.string("reason"),
+            allowTitle: fields.string("allow_title"),
+            declineTitle: fields.string("decline_title"),
+            decision: fields.string("decision").map(Decision.init(rawValue:))
+        )
     }
 }
 
@@ -273,6 +357,10 @@ struct Fields {
     func int(_ key: String) -> Int? {
         guard let number = object[key] as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
         return number.intValue
+    }
+
+    func fields(_ key: String) -> Fields? {
+        (object[key] as? [String: Any]).map(Fields.init)
     }
 
     func json(_ key: String) -> Data? {
