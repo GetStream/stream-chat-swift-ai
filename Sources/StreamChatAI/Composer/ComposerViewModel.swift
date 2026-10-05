@@ -107,7 +107,12 @@ public class ComposerViewModel: ObservableObject {
     }
 }
 
-public struct AttachmentLocation {
+public final class AttachmentLocation {
     public let url: URL
     public let isTemporary: Bool
+
+    init(url: URL, isTemporary: Bool) {
+        self.url = url
+        self.isTemporary = isTemporary
+    }
 }

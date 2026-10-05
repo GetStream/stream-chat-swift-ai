@@ -97,10 +97,10 @@ public protocol ClientTool: AnyObject {
 
 /// Represents a client-side invocation of a tool, including the tool's metadata
 /// and any arguments provided by the Model Context Protocol (MCP) runtime.
-public struct ClientToolInvocation {
+public final class ClientToolInvocation {
 
     /// A descriptor containing metadata about a tool being invoked.
-    public struct ToolDescriptor {
+    public final class ToolDescriptor {
 
         /// The unique name of the tool being invoked.
         let name: String
@@ -179,7 +179,7 @@ public typealias ClientToolAction = () -> Void
 /// A payload describing a tool to the MCP runtime during registration.
 /// This structure encapsulates the metadata, usage instructions, parameter schema,
 /// and optional UI behaviors associated with the tool.
-public struct ToolRegistrationPayload: Encodable {
+public final class ToolRegistrationPayload: Encodable {
 
     /// The unique name of the tool. This is how the MCP runtime identifies it.
     public let name: String
@@ -198,4 +198,12 @@ public struct ToolRegistrationPayload: Encodable {
     /// Indicates whether the client UI should display an indicator when the tool
     /// interacts with external data sources.
     public let showExternalSourcesIndicator: Bool?
+
+    init(name: String, description: String, instructions: String?, parameters: Value?, showExternalSourcesIndicator: Bool?) {
+        self.name = name
+        self.description = description
+        self.instructions = instructions
+        self.parameters = parameters
+        self.showExternalSourcesIndicator = showExternalSourcesIndicator
+    }
 }

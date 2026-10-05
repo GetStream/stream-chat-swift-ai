@@ -19,14 +19,14 @@ public struct UPoint: Identifiable, Hashable {
     }
 }
 
-public struct USeries: Identifiable {
+public final class USeries: Identifiable {
     public let id = UUID()
     public let name: String
     public let points: [UPoint]
     public init(name: String, points: [UPoint]) { self.name = name; self.points = points }
 }
 
-public struct USpec {
+public final class USpec {
     public let title: String?
     public let kind: ChartKind
     public let xLabel: String?
@@ -40,408 +40,363 @@ public struct USpec {
 
 // MARK: - Decoders & Adapters
 
-private enum ParsedSpecError: Error { case unsupported }
+private enum ParsedSpecError: Error {
+    /// The JSON is no chart this SDK can draw.
+    case unsupported
+    /// The JSON is not in the format being read, so the next one is tried.
+    case mismatch
+}
 
 public func parseUSpec(from jsonData: Data) throws -> USpec {
-    // 1) Chart.js (+ pie/doughnut + scatter + bubble + radar/polarArea fallbacks)
-    if let j = try? JSONDecoder().decode(ChartJSSpec.self, from: jsonData) {
-        if let pie = mapChartJSPieIfAny(j) { return pie }
-        return mapChartJSGeneral(j)
+    guard let root = try? JSONObject(JSONSerialization.jsonObject(with: jsonData)) else {
+        throw ParsedSpecError.unsupported
     }
-    // 1b) Plotly (heatmap): single-spec and figure
-    if let p = try? JSONDecoder().decode(PlotlySingleSpec.self, from: jsonData), p.type.lowercased() == "heatmap" {
-        return mapPlotlySingleHeatmap(p)
-    }
-    if let fig = try? JSONDecoder().decode(PlotlyFigure.self, from: jsonData), let mapped = mapPlotlyFigure(fig) {
-        return mapped
-    }
-    // 2) ECharts
-    if let e = try? JSONDecoder().decode(EChartsSpec.self, from: jsonData) {
-        return mapECharts(e)
-    }
-    // 3) Highcharts
-    if let h = try? JSONDecoder().decode(HighchartsSpec.self, from: jsonData) {
-        return mapHighcharts(h)
-    }
-    // 4) Vega-Lite (subset)
-    if let v = try? JSONDecoder().decode(VegaLiteSpec.self, from: jsonData) {
-        return try mapVegaLite(v)
-    }
-    // 5) Custom earlier schema (line/bar/area/scatter)
-    if let c = try? JSONDecoder().decode(CustomSpec.self, from: jsonData) {
-        return mapCustom(c)
-    }
-    // 6) Flat pie schema
-    if let p = try? JSONDecoder().decode(PieFlatSpec.self, from: jsonData), p.type.lowercased() == "pie" {
-        return mapPieFlat(p)
+    // Chart.js, Plotly heatmaps (a single spec, then a figure), ECharts, Highcharts, a subset of
+    // Vega-Lite, the custom schema and the flat pie schema, in that order.
+    let formats: [(JSONObject) throws -> USpec] = [chartJS, plotlySpec, plotlyFigure, eCharts, highcharts, vegaLite, custom, pieFlat]
+    for format in formats {
+        do {
+            return try format(root)
+        } catch ParsedSpecError.mismatch {
+            continue
+        }
     }
     throw ParsedSpecError.unsupported
 }
 
-// ---------- Custom schema (from earlier) ----------
-private struct CustomPoint: Decodable { let x: String; let y: Double }
-private struct CustomSeries: Decodable { let name: String; let points: [CustomPoint] }
-private struct CustomSpec: Decodable {
-    let title: String?
-    let x_label: String?
-    let y_label: String?
-    let chart_type: String
-    let series: [CustomSeries]
+/// A JSON object, read as strictly as `JSONDecoder` reads a `Decodable` type: a required field
+/// that is missing or null, or any field of the wrong type, means the JSON is in another format.
+private struct JSONObject {
+    let fields: [String: Any]
+
+    init(_ value: Any) throws {
+        guard let fields = value as? [String: Any] else { throw ParsedSpecError.mismatch }
+        self.fields = fields
+    }
+
+    /// The field, or `nil` when it is missing or null.
+    subscript(_ key: String) -> Any? {
+        guard let value = fields[key], !(value is NSNull) else { return nil }
+        return value
+    }
+
+    func required(_ key: String) throws -> Any {
+        guard let value = self[key] else { throw ParsedSpecError.mismatch }
+        return value
+    }
+
+    func string(_ key: String) throws -> String { try asString(required(key)) }
+    func number(_ key: String) throws -> Double { try asNumber(required(key)) }
+    func array(_ key: String) throws -> [Any] { try asArray(required(key)) }
+    func object(_ key: String) throws -> JSONObject { try JSONObject(required(key)) }
+    func optionalString(_ key: String) throws -> String? { try self[key].map(asString) }
+    func optionalStrings(_ key: String) throws -> [String]? { try self[key].map { try asArray($0).map(asString) } }
+    func optionalObject(_ key: String) throws -> JSONObject? { try self[key].map(JSONObject.init) }
 }
-private func mapCustom(_ c: CustomSpec) -> USpec {
-    let kind = ChartKind(rawValue: c.chart_type.lowercased()) ?? .line
-    let series = c.series.map { USeries(name: $0.name, points: $0.points.map { UPoint(x: $0.x, y: $0.y) }) }
-    return USpec(title: c.title, kind: kind, xLabel: c.x_label, yLabel: c.y_label, beginAtZeroY: false, series: series)
+
+private func asString(_ value: Any) throws -> String {
+    guard let string = value as? String else { throw ParsedSpecError.mismatch }
+    return string
+}
+
+private func asArray(_ value: Any) throws -> [Any] {
+    guard let array = value as? [Any] else { throw ParsedSpecError.mismatch }
+    return array
+}
+
+/// A JSON number. Like `JSONDecoder`, it reads no other value as a `Double`, booleans included.
+private func asNumber(_ value: Any) throws -> Double {
+    guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { throw ParsedSpecError.mismatch }
+    return number.doubleValue
+}
+
+private func asNumbers(_ value: Any) throws -> [Double] { try asArray(value).map(asNumber) }
+
+private func asBool(_ value: Any) throws -> Bool {
+    guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { throw ParsedSpecError.mismatch }
+    return number.boolValue
+}
+
+/// A loosely typed number, as `AnyDecodable` reads it: a number, or a boolean as 1 or 0.
+private func looseNumber(_ value: Any?) -> Double? { (value as? NSNumber)?.doubleValue }
+
+private func looseString(_ value: Any?) -> String? { value as? String }
+
+// ---------- Custom schema (from earlier) ----------
+private func custom(_ root: JSONObject) throws -> USpec {
+    let title = try root.optionalString("title")
+    let xLabel = try root.optionalString("x_label")
+    let yLabel = try root.optionalString("y_label")
+    let kind = try ChartKind(rawValue: root.string("chart_type").lowercased()) ?? .line
+    let series = try root.array("series").map { series -> USeries in
+        let series = try JSONObject(series)
+        return try USeries(name: series.string("name"), points: series.array("points").map { point in
+            let point = try JSONObject(point)
+            return try UPoint(x: point.string("x"), y: point.number("y"))
+        })
+    }
+    return USpec(title: title, kind: kind, xLabel: xLabel, yLabel: yLabel, beginAtZeroY: false, series: series)
 }
 
 // ---------- Flat pie ----------
-private struct PieFlatItem: Decodable { let label: String; let value: Double }
-private struct PieFlatSpec: Decodable { let type: String; let title: String?; let data: [PieFlatItem] }
-private func mapPieFlat(_ p: PieFlatSpec) -> USpec {
-    let s = USeries(name: p.title ?? "Pie", points: p.data.map { UPoint(x: $0.label, y: $0.value) })
-    return USpec(title: p.title, kind: .pie, series: [s])
+private func pieFlat(_ root: JSONObject) throws -> USpec {
+    let type = try root.string("type")
+    let title = try root.optionalString("title")
+    let points = try root.array("data").map { item -> UPoint in
+        let item = try JSONObject(item)
+        return try UPoint(x: item.string("label"), y: item.number("value"))
+    }
+    guard type.lowercased() == "pie" else { throw ParsedSpecError.mismatch }
+    return USpec(title: title, kind: .pie, series: [USeries(name: title ?? "Pie", points: points)])
 }
 
 // ---------- Chart.js ----------
-private struct ChartJSDatasetValue: Decodable {
-    // supports number OR object {x,y,r}
-    var x: Double?
-    var y: Double?
-    var r: Double?
-    
-    init(x: Double? = nil, y: Double? = nil, r: Double? = nil) {
-        self.x = x
-        self.y = y
-        self.r = r
+private typealias ChartJSValue = (x: Double?, y: Double?, r: Double?)
+
+/// A Chart.js value: a number, or an object of numbers `{x, y, r}`. Anything else has none.
+private func chartJSValue(_ value: Any) -> ChartJSValue {
+    if let y = try? asNumber(value) { return (nil, y, nil) }
+    if let object = value as? [String: Any], let numbers = try? object.mapValues(asNumber) {
+        return (numbers["x"], numbers["y"], numbers["r"])
     }
-    
-    init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        if let num = try? c.decode(Double.self) {
-            self.x = nil; self.y = num; self.r = nil
-        } else if let obj = try? c.decode([String: Double].self) {
-            self.x = obj["x"]; self.y = obj["y"]; self.r = obj["r"]
-        } else { self.x = nil; self.y = nil; self.r = nil }
-    }
-}
-private struct ChartJSDataset: Decodable {
-    let label: String?
-    let data: [ChartJSDatasetValue]
-}
-private struct ChartJSData: Decodable {
-    let labels: [String]?
-    let datasets: [ChartJSDataset]
-}
-private struct ChartJSOptions: Decodable { let scales: ChartJSScales? }
-private struct ChartJSScales: Decodable { let y: ChartJSScaleY? }
-private struct ChartJSScaleY: Decodable { let beginAtZero: Bool? }
-private struct ChartJSSpec: Decodable {
-    let title: String?
-    let type: String
-    let data: ChartJSData
-    let options: ChartJSOptions?
+    return (nil, nil, nil)
 }
 
-private func mapChartJSPieIfAny(_ j: ChartJSSpec) -> USpec? {
-    let t = j.type.lowercased()
-    guard t == "pie" || t == "doughnut" else { return nil }
-    guard let ds = j.data.datasets.first else { return nil }
-    let labels = j.data.labels ?? Array(0..<ds.data.count).map(String.init)
-    let points: [UPoint] = zip(labels, ds.data).compactMap { (lbl, v) in
-        if let y = v.y { return UPoint(x: lbl, y: y) } else { return nil }
+private func chartJS(_ root: JSONObject) throws -> USpec {
+    let title = try root.optionalString("title")
+    let type = try root.string("type").lowercased()
+    let data = try root.object("data")
+    let labels = try data.optionalStrings("labels")
+    let datasets = try data.array("datasets").map { dataset -> (label: String?, values: [ChartJSValue]) in
+        let dataset = try JSONObject(dataset)
+        return try (dataset.optionalString("label"), dataset.array("data").map(chartJSValue))
     }
-    return USpec(title: j.title, kind: .pie, series: [USeries(name: ds.label ?? "Pie", points: points)])
-}
+    var beginAtZero = false
+    if let y = try root.optionalObject("options")?.optionalObject("scales")?.optionalObject("y"), let begin = y["beginAtZero"] {
+        beginAtZero = try asBool(begin)
+    }
 
-private func mapChartJSGeneral(_ j: ChartJSSpec) -> USpec {
-    let type = j.type.lowercased()
-    let begin0 = j.options?.scales?.y?.beginAtZero ?? false
+    // Pie and doughnut
+    if type == "pie" || type == "doughnut", let dataset = datasets.first {
+        let labels = labels ?? Array(0..<dataset.values.count).map(String.init)
+        let points = zip(labels, dataset.values).compactMap { label, value in value.y.map { UPoint(x: label, y: $0) } }
+        return USpec(title: title, kind: .pie, series: [USeries(name: dataset.label ?? "Pie", points: points)])
+    }
 
-    let series: [USeries] = j.data.datasets.map { ds in
-        if let labels = j.data.labels { // arrays aligned with labels
-            var pts: [UPoint] = []
-            for (idx, lbl) in labels.enumerated() {
-                let v = idx < ds.data.count ? ds.data[idx] : ChartJSDatasetValue(x: nil, y: nil, r: nil)
-                if let y = v.y {
-                    pts.append(UPoint(x: lbl, y: y, size: v.r))
-                }
+    let series = datasets.map { dataset -> USeries in
+        let points: [UPoint]
+        if let labels { // arrays aligned with labels
+            points = labels.enumerated().compactMap { index, label in
+                let value: ChartJSValue = index < dataset.values.count ? dataset.values[index] : (nil, nil, nil)
+                return value.y.map { UPoint(x: label, y: $0, size: value.r) }
             }
-            return USeries(name: ds.label ?? "Series", points: pts)
-        } else {
-            // scatter/bubble with objects {x,y,r}
-            let pts = ds.data.compactMap { v -> UPoint? in
-                guard let x = v.x, let y = v.y else { return nil }
-                return UPoint(x: String(x), y: y, size: v.r)
+        } else { // scatter/bubble with objects {x,y,r}
+            points = dataset.values.compactMap { value in
+                guard let x = value.x, let y = value.y else { return nil }
+                return UPoint(x: String(x), y: y, size: value.r)
             }
-            return USeries(name: ds.label ?? "Series", points: pts)
         }
+        return USeries(name: dataset.label ?? "Series", points: points)
     }
 
-    let kind: ChartKind = {
-        switch type {
-        case "line": return .line
-        case "bar": return .bar
-        case "area": return .area
-        case "scatter": return .scatter
-        case "bubble": return .bubble
-        case "radar": return .bar // fallback mapping
-        case "polararea": return .pie // fallback mapping
-        default: return .line
-        }
-    }()
-
-    return USpec(title: j.title, kind: kind, beginAtZeroY: begin0, series: series)
+    let kind: ChartKind = switch type {
+    case "line": .line
+    case "bar": .bar
+    case "area": .area
+    case "scatter": .scatter
+    case "bubble": .bubble
+    case "radar": .bar // fallback mapping
+    case "polararea": .pie // fallback mapping
+    default: .line
+    }
+    return USpec(title: title, kind: kind, beginAtZeroY: beginAtZero, series: series)
 }
 
-// ---------- ECharts ----------
-private struct EChartsSeries: Decodable {
-    let name: String?
-    let type: String?
-    let data: [EChartsDatum]
-}
-private enum EChartsDatum: Decodable {
+// ---------- ECharts and Highcharts ----------
+/// A series value: a number, an `[x, y]` pair or, in ECharts, an object such as
+/// `{name, value}`. Anything else reads as 0.
+private enum Datum {
     case number(Double)
     case pair([Double])
-    case obj([String: AnyDecodable])
-    init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        if let n = try? c.decode(Double.self) { self = .number(n); return }
-        if let arr = try? c.decode([Double].self) { self = .pair(arr); return }
-        if let obj = try? c.decode([String: AnyDecodable].self) { self = .obj(obj); return }
-        self = .number(0)
+    case object([String: Any])
+
+    init(_ value: Any, objects: Bool) {
+        if let number = try? asNumber(value) {
+            self = .number(number)
+        } else if let pair = try? asNumbers(value) {
+            self = .pair(pair)
+        } else if objects, let object = value as? [String: Any] {
+            self = .object(object)
+        } else {
+            self = .number(0)
+        }
     }
 }
-private struct EChartsSpec: Decodable { let title: TitleWrapper?; let xAxis: EAxis?; let yAxis: EAxis?; let series: [EChartsSeries] }
-private struct TitleWrapper: Decodable { let text: String? }
-private struct EAxis: Decodable { let data: [String]?; let type: String? }
 
-private func mapECharts(_ e: EChartsSpec) -> USpec {
-    let title = e.title?.text
-    let categories = e.xAxis?.data
+private func series(_ root: JSONObject, objects: Bool) throws -> [(name: String?, type: String?, data: [Datum])] {
+    try root.array("series").map { series in
+        let series = try JSONObject(series)
+        return try (series.optionalString("name"), series.optionalString("type"), series.array("data").map { Datum($0, objects: objects) })
+    }
+}
 
-    var allSeries: [USeries] = []
-    for s in e.series {
-        let name = s.name ?? "Series"
-        var pts: [UPoint] = []
-        switch s.type?.lowercased() {
-        case "pie":
-            // ECharts pie often encodes data as [{name: "Android", value: 71.9}, ...]
-            for d in s.data {
-                if case .obj(let obj) = d,
-                   let nameVal = obj["name"]?.string,
-                   let valueVal = obj["value"]?.double {
-                    pts.append(UPoint(x: nameVal, y: valueVal))
-                }
-            }
-        default:
-            if let cats = categories { // aligned arrays with xAxis.data
-                for (idx, d) in s.data.enumerated() {
-                    let x = idx < cats.count ? cats[idx] : String(idx)
-                    switch d {
-                    case .number(let v): pts.append(UPoint(x: x, y: v))
-                    case .pair(let arr): if arr.count >= 2 { pts.append(UPoint(x: String(arr[0]), y: arr[1])) }
-                    case .obj(let obj): if let v = obj["value"]?.double { pts.append(UPoint(x: x, y: v)) }
-                    }
-                }
-            } else {
-                for d in s.data {
-                    switch d {
-                    case .number(let v): pts.append(UPoint(x: String(pts.count), y: v))
-                    case .pair(let arr): if arr.count >= 2 { pts.append(UPoint(x: String(arr[0]), y: arr[1])) }
-                    case .obj(let obj):
-                        if let v = obj["value"]?.double, let x = obj["name"]?.string ?? obj["x"]?.string { pts.append(UPoint(x: x, y: v)) }
-                    }
-                }
+/// A series' points: values aligned with the categories, when there are any, and counted
+/// from zero otherwise.
+private func points(_ data: [Datum], categories: [String]?) -> [UPoint] {
+    var points: [UPoint] = []
+    for (index, datum) in data.enumerated() {
+        let category = categories.map { index < $0.count ? $0[index] : String(index) }
+        switch datum {
+        case .number(let y):
+            points.append(UPoint(x: category ?? String(points.count), y: y))
+        case .pair(let pair):
+            if pair.count >= 2 { points.append(UPoint(x: String(pair[0]), y: pair[1])) }
+        case .object(let object):
+            if let y = looseNumber(object["value"]), let x = category ?? looseString(object["name"]) ?? looseString(object["x"]) {
+                points.append(UPoint(x: x, y: y))
             }
         }
-        allSeries.append(USeries(name: name, points: pts))
     }
+    return points
+}
 
+/// An ECharts axis' categories.
+private func eChartsAxis(_ root: JSONObject, _ key: String) throws -> [String]? {
+    guard let axis = try root.optionalObject(key) else { return nil }
+    _ = try axis.optionalString("type")
+    return try axis.optionalStrings("data")
+}
+
+private func eCharts(_ root: JSONObject) throws -> USpec {
+    let title = try root.optionalObject("title")?.optionalString("text")
+    let categories = try eChartsAxis(root, "xAxis")
+    _ = try eChartsAxis(root, "yAxis")
+    let allSeries = try series(root, objects: true)
+    let series = allSeries.map { series in
+        guard series.type?.lowercased() == "pie" else {
+            return USeries(name: series.name ?? "Series", points: points(series.data, categories: categories))
+        }
+        // ECharts pie often encodes data as [{name: "Android", value: 71.9}, ...]
+        return USeries(name: series.name ?? "Series", points: series.data.compactMap { datum in
+            guard case .object(let object) = datum, let name = looseString(object["name"]), let value = looseNumber(object["value"]) else { return nil }
+            return UPoint(x: name, y: value)
+        })
+    }
     // Guess kind by first series type
-    let firstType = e.series.first?.type?.lowercased()
-    let kind: ChartKind = {
-        switch firstType {
-        case "bar": return .bar
-        case "line": return .line
-        case "scatter": return .scatter
-        case "pie": return .pie
-        default: return .line
-        }
-    }()
-
-    return USpec(title: title, kind: kind, series: allSeries)
-}
-
-// ---------- Highcharts ----------
-private struct HighchartsSeries: Decodable {
-    let name: String?
-    let type: String?
-    let data: [HighchartsDatum]
-}
-private enum HighchartsDatum: Decodable {
-    case number(Double)
-    case pair([Double])
-    init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        if let n = try? c.decode(Double.self) { self = .number(n); return }
-        if let arr = try? c.decode([Double].self) { self = .pair(arr); return }
-        self = .number(0)
+    let kind: ChartKind = switch allSeries.first?.type?.lowercased() {
+    case "bar": .bar
+    case "line": .line
+    case "scatter": .scatter
+    case "pie": .pie
+    default: .line
     }
+    return USpec(title: title, kind: kind, series: series)
 }
-private struct HighchartsXAxis: Decodable { let categories: [String]? }
-private struct HighchartsSpec: Decodable { let title: HCTitle?; let xAxis: HighchartsXAxis?; let series: [HighchartsSeries] }
-private struct HCTitle: Decodable { let text: String? }
 
-private func mapHighcharts(_ h: HighchartsSpec) -> USpec {
-    let title = h.title?.text
-    let categories = h.xAxis?.categories
-    let series: [USeries] = h.series.map { s in
-        let name = s.name ?? "Series"
-        var pts: [UPoint] = []
-        if let cats = categories {
-            for (idx, v) in s.data.enumerated() {
-                let x = idx < cats.count ? cats[idx] : String(idx)
-                switch v {
-                case .number(let n): pts.append(UPoint(x: x, y: n))
-                case .pair(let arr): if arr.count >= 2 { pts.append(UPoint(x: String(arr[0]), y: arr[1])) }
-                }
-            }
-        } else {
-            for v in s.data {
-                switch v {
-                case .number(let n): pts.append(UPoint(x: String(pts.count), y: n))
-                case .pair(let arr): if arr.count >= 2 { pts.append(UPoint(x: String(arr[0]), y: arr[1])) }
-                }
-            }
-        }
-        return USeries(name: name, points: pts)
+private func highcharts(_ root: JSONObject) throws -> USpec {
+    let title = try root.optionalObject("title")?.optionalString("text")
+    let categories = try root.optionalObject("xAxis")?.optionalStrings("categories")
+    let allSeries = try series(root, objects: false)
+    let kind: ChartKind = switch allSeries.first?.type?.lowercased() {
+    case "bar", "column": .bar
+    case "line", "spline": .line
+    case "scatter": .scatter
+    case "pie": .pie
+    default: .line
     }
-    let kind: ChartKind = {
-        switch h.series.first?.type?.lowercased() {
-        case "bar", "column": return .bar
-        case "line", "spline": return .line
-        case "scatter": return .scatter
-        case "pie": return .pie
-        default: return .line
-        }
-    }()
+    let series = allSeries.map { USeries(name: $0.name ?? "Series", points: points($0.data, categories: categories)) }
     return USpec(title: title, kind: kind, series: series)
 }
 
 // ---------- Vega-Lite (tiny subset) ----------
-private struct VegaLiteSpec: Decodable {
-    let schema: String? // $schema (not required here)
-    let data: VegaData
-    let mark: VegaMark
-    let encoding: VegaEncoding
-    enum CodingKeys: String, CodingKey { case schema = "$schema", data, mark, encoding }
-}
-private struct VegaData: Decodable { let values: [VegaRow]? }
-private struct VegaRow: Decodable { let raw: [String: AnyDecodable]
-    init(from decoder: Decoder) throws { let c = try decoder.singleValueContainer(); raw = (try? c.decode([String: AnyDecodable].self)) ?? [:] }
-}
-private enum VegaMark: Decodable { case str(String)
-    init(from decoder: Decoder) throws { let c = try decoder.singleValueContainer(); let s = (try? c.decode(String.self))?.lowercased() ?? "point"; self = .str(s) }
-}
-private struct VegaFieldRef: Decodable { let field: String? }
-private struct VegaEncoding: Decodable { let x: VegaFieldRef?; let y: VegaFieldRef?; let color: VegaFieldRef?; let size: VegaFieldRef? }
-
-private func mapVegaLite(_ v: VegaLiteSpec) throws -> USpec {
-    guard let rows = v.data.values else { throw ParsedSpecError.unsupported }
-    let xField = v.encoding.x?.field ?? "x"
-    let yField = v.encoding.y?.field ?? "y"
-    let colorField = v.encoding.color?.field
-    let sizeField = v.encoding.size?.field
+private func vegaLite(_ root: JSONObject) throws -> USpec {
+    _ = try root.optionalString("$schema")
+    let values = try root.object("data")["values"].map(asArray)
+    guard let mark = root.fields["mark"] else { throw ParsedSpecError.mismatch }
+    let encoding = try root.object("encoding")
+    func field(_ channel: String) throws -> String? {
+        try encoding.optionalObject(channel)?.optionalString("field")
+    }
+    let xField = try field("x") ?? "x"
+    let yField = try field("y") ?? "y"
+    let colorField = try field("color")
+    let sizeField = try field("size")
+    // Without inline values there is nothing to draw, and no other format is tried.
+    guard let values else { throw ParsedSpecError.unsupported }
 
     // Group by colorField into series
     var groups: [String: [UPoint]] = [:]
-    for r in rows {
-        let xStr = r.raw[xField]?.string ?? String(r.raw[xField]?.double ?? 0)
-        let yVal = r.raw[yField]?.double ?? 0
-        let key = colorField.flatMap { r.raw[$0]?.string } ?? "Series"
-        let sizeVal = sizeField.flatMap { r.raw[$0]?.double }
-        groups[key, default: []].append(UPoint(x: xStr, y: yVal, size: sizeVal))
+    for row in values {
+        let row = row as? [String: Any] ?? [:]
+        let x = looseString(row[xField]) ?? String(looseNumber(row[xField]) ?? 0)
+        let key = colorField.flatMap { looseString(row[$0]) } ?? "Series"
+        let size = sizeField.flatMap { looseNumber(row[$0]) }
+        groups[key, default: []].append(UPoint(x: x, y: looseNumber(row[yField]) ?? 0, size: size))
     }
 
-    let series = groups.map { USeries(name: $0.key, points: $0.value) }
-
     // Determine kind from mark
-    let kind: ChartKind = {
-        if case let .str(s) = v.mark {
-            switch s {
-            case "line": return .line
-            case "bar": return .bar
-            case "area": return .area
-            case "point": return .scatter
-            case "rect": return .heatmap
-            default: return .line
-            }
-        } else { return .line }
-    }()
-
-    return USpec(title: nil, kind: kind, series: series)
+    let kind: ChartKind = switch (mark as? String)?.lowercased() ?? "point" {
+    case "line": .line
+    case "bar": .bar
+    case "area": .area
+    case "point": .scatter
+    case "rect": .heatmap
+    default: .line
+    }
+    return USpec(title: nil, kind: kind, series: groups.map { USeries(name: $0.key, points: $0.value) })
 }
 
 // ---------- Plotly (heatmap) ----------
-private struct PlotlyLayoutAxisTitle: Decodable {
-    let text: String?
-    init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        if let s = try? c.decode(String.self) { text = s }
-        else if let obj = try? c.decode([String:String].self) { text = obj["text"] }
-        else { text = nil }
-    }
-}
-private struct PlotlyAxis: Decodable { let title: PlotlyLayoutAxisTitle? }
-private struct PlotlyLayout: Decodable { let title: PlotlyLayoutAxisTitle?; let xaxis: PlotlyAxis?; let yaxis: PlotlyAxis? }
-private struct PlotlyHeatmapDataSingle: Decodable { let z: [[Double]]; let x: [String]?; let y: [String]? }
-private struct PlotlySingleSpec: Decodable { let type: String; let data: PlotlyHeatmapDataSingle; let layout: PlotlyLayout? }
-private struct PlotlyTrace: Decodable { let type: String?; let z: [[Double]]?; let x: [String]?; let y: [String]?; let name: String? }
-private struct PlotlyFigure: Decodable { let data: [PlotlyTrace]; let layout: PlotlyLayout? }
-
-private func mapPlotlySingleHeatmap(_ p: PlotlySingleSpec) -> USpec {
-    let z = p.data.z
-    let xCats = p.data.x ?? (z.first?.indices.map { String($0) } ?? [])
-    let yCats = p.data.y ?? z.indices.map { String($0) }
-    var series: [USeries] = []
-    for (i, row) in z.enumerated() {
-        let yName = i < yCats.count ? yCats[i] : String(i)
-        var pts: [UPoint] = []
-        for (j, val) in row.enumerated() {
-            let xName = j < xCats.count ? xCats[j] : String(j)
-            pts.append(UPoint(x: xName, y: 0, z: val))
-        }
-        series.append(USeries(name: yName, points: pts))
-    }
-    return USpec(title: p.layout?.title?.text,
-                 kind: .heatmap,
-                 xLabel: p.layout?.xaxis?.title?.text,
-                 yLabel: p.layout?.yaxis?.title?.text,
-                 beginAtZeroY: false,
-                 series: series)
+/// A Plotly title: a string, or an object of strings with its `text`.
+private func plotlyTitle(_ value: Any?) -> String? {
+    if let text = value as? String { return text }
+    guard let object = value as? [String: Any], object.values.allSatisfy({ $0 is String }) else { return nil }
+    return object["text"] as? String
 }
 
-private func mapPlotlyFigure(_ f: PlotlyFigure) -> USpec? {
-    guard let trace = f.data.first(where: { ($0.type?.lowercased() == "heatmap") && $0.z != nil }) else { return nil }
-    let z = trace.z!
-    let xCats = trace.x ?? (z.first?.indices.map { String($0) } ?? [])
-    let yCats = trace.y ?? z.indices.map { String($0) }
-    var series: [USeries] = []
-    for (i, row) in z.enumerated() {
-        let yName = i < yCats.count ? yCats[i] : String(i)
-        var pts: [UPoint] = []
-        for (j, val) in row.enumerated() {
-            let xName = j < xCats.count ? xCats[j] : String(j)
-            pts.append(UPoint(x: xName, y: 0, z: val))
-        }
-        series.append(USeries(name: yName, points: pts))
+private typealias PlotlyTitles = (title: String?, x: String?, y: String?)
+
+private func plotlyLayout(_ root: JSONObject) throws -> PlotlyTitles {
+    guard let layout = try root.optionalObject("layout") else { return (nil, nil, nil) }
+    let xAxis = try layout.optionalObject("xaxis")
+    let yAxis = try layout.optionalObject("yaxis")
+    return (plotlyTitle(layout["title"]), plotlyTitle(xAxis?["title"]), plotlyTitle(yAxis?["title"]))
+}
+
+/// One series per row of `z`, named by `y`, with a point per column, named by `x`.
+private func heatmap(z: [[Double]], x: [String]?, y: [String]?, titles: PlotlyTitles) -> USpec {
+    let xCats = x ?? (z.first?.indices.map { String($0) } ?? [])
+    let yCats = y ?? z.indices.map { String($0) }
+    let series = z.enumerated().map { i, row in
+        USeries(name: i < yCats.count ? yCats[i] : String(i), points: row.enumerated().map { j, value in
+            UPoint(x: j < xCats.count ? xCats[j] : String(j), y: 0, z: value)
+        })
     }
-    return USpec(title: f.layout?.title?.text,
-                 kind: .heatmap,
-                 xLabel: f.layout?.xaxis?.title?.text,
-                 yLabel: f.layout?.yaxis?.title?.text,
-                 beginAtZeroY: false,
-                 series: series)
+    return USpec(title: titles.title, kind: .heatmap, xLabel: titles.x, yLabel: titles.y, beginAtZeroY: false, series: series)
+}
+
+private func plotlySpec(_ root: JSONObject) throws -> USpec {
+    let type = try root.string("type")
+    let data = try root.object("data")
+    let z = try data.array("z").map(asNumbers)
+    let x = try data.optionalStrings("x")
+    let y = try data.optionalStrings("y")
+    let titles = try plotlyLayout(root)
+    guard type.lowercased() == "heatmap" else { throw ParsedSpecError.mismatch }
+    return heatmap(z: z, x: x, y: y, titles: titles)
+}
+
+private func plotlyFigure(_ root: JSONObject) throws -> USpec {
+    let traces = try root.array("data").map { trace -> (type: String?, z: [[Double]]?, x: [String]?, y: [String]?) in
+        let trace = try JSONObject(trace)
+        _ = try trace.optionalString("name")
+        return try (trace.optionalString("type"), trace["z"].map { try asArray($0).map(asNumbers) }, trace.optionalStrings("x"), trace.optionalStrings("y"))
+    }
+    let titles = try plotlyLayout(root)
+    guard let trace = traces.first(where: { $0.type?.lowercased() == "heatmap" && $0.z != nil }), let z = trace.z else {
+        throw ParsedSpecError.mismatch
+    }
+    return heatmap(z: z, x: trace.x, y: trace.y, titles: titles)
 }
 
 // ---------- AnyDecodable helper ----------
@@ -631,10 +586,6 @@ private func makeBins(_ values: [Double], targetBins: Int) -> [Bin] {
 }
 
 // MARK: - View helpers
-private func colorForIndex(_ i: Int) -> Color {
-    let colors: [Color] = [.blue, .green, .orange, .pink, .purple, .teal, .red, .indigo, .mint, .brown]
-    return colors[i % colors.count]
-}
 
 @available(iOS 16.0, *)
 private extension View {

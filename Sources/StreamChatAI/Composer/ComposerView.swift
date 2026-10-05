@@ -437,30 +437,22 @@ struct ComposerPickerView: View {
                     if let identifier = item.itemIdentifier,
                        let asset = photoLibrary.asset(for: identifier),
                        let url = await photoLibrary.fileURL(for: asset) {
-                        await MainActor.run {
-                            viewModel.appendAttachment(.init(url: url, isTemporary: false))
-                        }
+                        viewModel.appendAttachment(.init(url: url, isTemporary: false))
                         continue
                     }
                     
                     if let url = try? await item.loadTransferable(type: URL.self) {
-                        await MainActor.run {
-                            viewModel.appendAttachment(.init(url: url, isTemporary: false))
-                        }
+                        viewModel.appendAttachment(.init(url: url, isTemporary: false))
                         continue
                     }
                     
                     if let data = try? await item.loadTransferable(type: Data.self),
                        let tempURL = writeAttachmentDataToTemporaryURL(data) {
-                        await MainActor.run {
-                            viewModel.appendAttachment(.init(url: tempURL, isTemporary: true))
-                        }
+                        viewModel.appendAttachment(.init(url: tempURL, isTemporary: true))
                     }
                 }
                 
-                await MainActor.run {
-                    allPhotosSelection = []
-                }
+                allPhotosSelection = []
             }
         }
         .fullScreenCover(isPresented: $cameraPresented) {
@@ -492,18 +484,14 @@ private struct RecentPhotoThumbnail: View {
         Button {
             Task {
                 if isSelected {
-                    await MainActor.run {
-                        didFail = false
-                        onSelectionChange(.deselect)
-                    }
+                    didFail = false
+                    onSelectionChange(.deselect)
                     return
                 }
                 
                 guard !isFetchingAttachment else { return }
-                await MainActor.run {
-                    didFail = false
-                    isFetchingAttachment = true
-                }
+                didFail = false
+                isFetchingAttachment = true
                 
                 var attachment: AttachmentLocation?
                 if let url = await service.fileURL(for: asset) {
@@ -512,34 +500,17 @@ private struct RecentPhotoThumbnail: View {
                           let tempURL = writeAttachmentDataToTemporaryURL(data) {
                     attachment = .init(url: tempURL, isTemporary: true)
                 }
-                await MainActor.run {
-                    isFetchingAttachment = false
-                    if let attachment {
-                        didFail = false
-                        onSelectionChange(.select(attachment))
-                    } else {
-                        didFail = true
-                        onSelectionChange(.failed)
-                    }
+                isFetchingAttachment = false
+                if let attachment {
+                    didFail = false
+                    onSelectionChange(.select(attachment))
+                } else {
+                    didFail = true
+                    onSelectionChange(.failed)
                 }
             }
         } label: {
-            AttachmentTile {
-                if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 100, height: 100)
-                        .allowsHitTesting(false)
-                        .clipped()
-                } else if didFail {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ProgressView()
-                }
-            }
+            ThumbnailTile(image: image, didFail: didFail)
             .overlay(alignment: .topTrailing) {
                 SelectionBadge(isSelected: isSelected)
                     .padding(6)
@@ -551,14 +522,10 @@ private struct RecentPhotoThumbnail: View {
             let scale = UIScreen.main.scale
             let size = CGSize(width: 100 * scale, height: 100 * scale)
             if let thumbnail = await service.thumbnail(for: asset, targetSize: size) {
-                await MainActor.run {
-                    image = thumbnail
-                    didFail = false
-                }
+                image = thumbnail
+                didFail = false
             } else {
-                await MainActor.run {
-                    didFail = true
-                }
+                didFail = true
             }
         }
         .onChange(of: isSelected) { selected in
@@ -578,35 +545,11 @@ private struct SelectedAttachmentThumbnail: View {
     @State private var didFail = false
     
     var body: some View {
-        AttachmentTile {
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 100, height: 100)
-                    .allowsHitTesting(false)
-                    .clipped()
-            } else if didFail {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            } else {
-                ProgressView()
-            }
-        }
+        ThumbnailTile(image: image, didFail: didFail)
         .overlay(alignment: .topTrailing) {
             Button(action: onRemove) {
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.9))
-                        .shadow(radius: 1)
-                    Circle()
-                        .fill(Color.black.opacity(0.7))
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 22, height: 22)
+                TileBadge(systemName: "xmark", fill: Color.black.opacity(0.7))
+                    .frame(width: 22, height: 22)
             }
             .buttonStyle(.plain)
             .padding(6)
@@ -614,14 +557,10 @@ private struct SelectedAttachmentThumbnail: View {
         .task {
             guard image == nil else { return }
             if let loaded = await loadImage() {
-                await MainActor.run {
-                    image = loaded
-                    didFail = false
-                }
+                image = loaded
+                didFail = false
             } else {
-                await MainActor.run {
-                    didFail = true
-                }
+                didFail = true
             }
         }
     }
@@ -657,6 +596,52 @@ private struct AttachmentTile<Content: View>: View {
     }
 }
 
+/// A photo's tile: the photo once it has loaded, a warning if it couldn't, and a spinner until then.
+@available(iOS 16, *)
+private struct ThumbnailTile: View {
+    let image: UIImage?
+    let didFail: Bool
+    
+    var body: some View {
+        AttachmentTile {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 100, height: 100)
+                    .allowsHitTesting(false)
+                    .clipped()
+            } else if didFail {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            } else {
+                ProgressView()
+            }
+        }
+    }
+}
+
+/// A round badge on a tile, such as its check mark or its remove button.
+@available(iOS 16, *)
+private struct TileBadge: View {
+    let systemName: String
+    let fill: Color
+    
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.white.opacity(0.9))
+                .shadow(radius: 1)
+            Circle()
+                .fill(fill)
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.white)
+        }
+    }
+}
+
 @available(iOS 16, *)
 private struct SelectionBadge: View {
     let isSelected: Bool
@@ -664,14 +649,7 @@ private struct SelectionBadge: View {
     var body: some View {
         ZStack {
             if isSelected {
-                Circle()
-                    .fill(Color.white.opacity(0.9))
-                    .shadow(radius: 1)
-                Circle()
-                    .fill(Color.accentColor)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white)
+                TileBadge(systemName: "checkmark", fill: .accentColor)
             } else {
                 Circle()
                     .stroke(Color.white, lineWidth: 2)

@@ -19,7 +19,7 @@ public struct StreamingMessageView: View {
     @State private var typingTimer: Timer?
     @State var queue = DispatchQueue(label: "com.streamai.textview")
     
-    private let supportedChartLanguages = ["json", "chart", "chartjs", "echarts", "highcharts", "vega-lite", "vegalite"]
+    private static let supportedChartLanguages = ["json", "chart", "chartjs", "echarts", "highcharts", "vega-lite", "vegalite"]
     
     public init(
         content: String,
@@ -34,21 +34,10 @@ public struct StreamingMessageView: View {
     public var body: some View {
         Markdown(displayedText)
           .markdownBlockStyle(\.codeBlock) { cfg in
-              if let language = cfg.language, supportedChartLanguages.contains(language.lowercased()) {
-                  if let data = cfg.content.data(using: .utf8),
-                    let spec = try? parseUSpec(from: data) {
-                      if #available(iOS 16.0, *) {
-                          USpecChartView(spec: spec)
-                      } else {
-                          // Fallback: render as a normal code block on older iOS
-                          codeBlock(cfg)
-                      }
-                  } else {
-                      // Not valid ChartSpec JSON, render as code block
-                      codeBlock(cfg)
-                  }
+              if let spec = Self.chartSpec(cfg) {
+                  USpecChartView(spec: spec)
               } else {
-                  // Non-JSON language, render as code block
+                  // Not a chart language, or not valid ChartSpec JSON: render as code block
                   codeBlock(cfg)
               }
           }
@@ -126,6 +115,14 @@ public struct StreamingMessageView: View {
             let nextCharacter = self.characterQueue.removeFirst()
             self.displayedText.append(nextCharacter)
         }
+    }
+
+    /// The chart a code block describes: its language is one charts are written in, and its
+    /// JSON is a chart spec.
+    private static func chartSpec(_ configuration: CodeBlockConfiguration) -> USpec? {
+        guard let language = configuration.language, supportedChartLanguages.contains(language.lowercased()),
+              let data = configuration.content.data(using: .utf8) else { return nil }
+        return try? parseUSpec(from: data)
     }
 
     @ViewBuilder

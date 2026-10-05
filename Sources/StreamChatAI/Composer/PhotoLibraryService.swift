@@ -53,38 +53,18 @@ final class PhotoLibraryService: ObservableObject {
             }
             
             self.imageManager.requestImageDataAndOrientation(for: asset, options: options) { data, _, _, info in
-                if let error = info?[PHImageErrorKey] as? NSError,
-                   error.domain == PHPhotosErrorDomain,
-                   error.code == Self.missingResourceErrorCode {
+                switch Self.outcome(of: info, hasResult: data != nil, request: "data fetch") {
+                case .result:
+                    resume(data)
+                case .failed:
+                    resume(nil)
+                case .fullSize:
                     if fallbackRequested { return }
                     fallbackRequested = true
-                    self.fetchFullSizeData(for: asset, resume: resume)
+                    self.fetchFullSizeData(for: asset, request: "full-size data", resume: resume)
+                case .wait:
                     return
                 }
-                
-                if (info?[PHImageCancelledKey] as? Bool) == true {
-                    resume(nil)
-                    return
-                }
-                
-                if let error = info?[PHImageErrorKey] as? Error {
-                    print("PhotoLibraryService data fetch error: \(error.localizedDescription)")
-                    resume(nil)
-                    return
-                }
-                
-                if let data {
-                    resume(data)
-                    return
-                }
-                
-                if (info?[PHImageResultIsDegradedKey] as? Bool) == true {
-                    return
-                }
-                
-                if fallbackRequested { return }
-                fallbackRequested = true
-                self.fetchFullSizeData(for: asset, resume: resume)
             }
         }
     }
@@ -123,43 +103,64 @@ final class PhotoLibraryService: ObservableObject {
                 contentMode: .aspectFill,
                 options: options
             ) { image, info in
-                if let error = info?[PHImageErrorKey] as? NSError,
-                   error.domain == PHPhotosErrorDomain,
-                   error.code == Self.missingResourceErrorCode {
+                switch Self.outcome(of: info, hasResult: image != nil, request: "thumbnail") {
+                case .result:
+                    resume(image)
+                case .failed:
+                    resume(nil)
+                case .fullSize:
                     if fallbackRequested { return }
                     fallbackRequested = true
-                    self.fetchFullSizeThumbnail(for: asset, resume: resume)
+                    self.fetchFullSizeData(for: asset, request: "full-size thumbnail") { data in
+                        resume(data.flatMap(UIImage.init(data:)))
+                    }
+                case .wait:
                     return
                 }
-                
-                if (info?[PHImageCancelledKey] as? Bool) == true {
-                    resume(nil)
-                    return
-                }
-                
-                if let error = info?[PHImageErrorKey] as? Error {
-                    print("PhotoLibraryService thumbnail error: \(error.localizedDescription)")
-                    resume(nil)
-                    return
-                }
-                
-                if let image {
-                    resume(image)
-                    return
-                }
-                
-                if (info?[PHImageResultIsDegradedKey] as? Bool) == true {
-                    return
-                }
-                
-                if fallbackRequested { return }
-                fallbackRequested = true
-                self.fetchFullSizeThumbnail(for: asset, resume: resume)
             }
         }
     }
     
-    private func fetchFullSizeData(for asset: PHAsset, resume: @escaping (Data?) -> Void) {
+    /// What to do with what the image manager delivered.
+    private enum RequestOutcome {
+        /// Use the delivered result.
+        case result
+        /// Give up.
+        case failed
+        /// Read the full-size photo instead.
+        case fullSize
+        /// Wait for a better result than this degraded one.
+        case wait
+    }
+    
+    private static func outcome(of info: [AnyHashable: Any]?, hasResult: Bool, request: String) -> RequestOutcome {
+        if let error = info?[PHImageErrorKey] as? NSError,
+           error.domain == PHPhotosErrorDomain,
+           error.code == missingResourceErrorCode {
+            return .fullSize
+        }
+        
+        if (info?[PHImageCancelledKey] as? Bool) == true {
+            return .failed
+        }
+        
+        if let error = info?[PHImageErrorKey] as? Error {
+            print("PhotoLibraryService \(request) error: \(error.localizedDescription)")
+            return .failed
+        }
+        
+        if hasResult {
+            return .result
+        }
+        
+        if (info?[PHImageResultIsDegradedKey] as? Bool) == true {
+            return .wait
+        }
+        
+        return .fullSize
+    }
+    
+    private func fetchFullSizeData(for asset: PHAsset, request: String, resume: @escaping (Data?) -> Void) {
         let resources = PHAssetResource.assetResources(for: asset)
         guard let resource = resources.first(where: { $0.type == .photo || $0.type == .fullSizePhoto }) ?? resources.first else {
             resume(nil)
@@ -174,45 +175,11 @@ final class PhotoLibraryService: ObservableObject {
             collected.append(chunk)
         } completionHandler: { error in
             if let error {
-                print("PhotoLibraryService full-size data error: \(error.localizedDescription)")
+                print("PhotoLibraryService \(request) error: \(error.localizedDescription)")
                 resume(nil)
                 return
             }
             resume(collected.isEmpty ? nil : collected)
-        }
-    }
-    
-    private func fetchFullSizeThumbnail(for asset: PHAsset, resume: @escaping (UIImage?) -> Void) {
-        let resources = PHAssetResource.assetResources(for: asset)
-        guard let resource = resources.first(where: { $0.type == .photo || $0.type == .fullSizePhoto }) ?? resources.first else {
-            resume(nil)
-            return
-        }
-        
-        let options = PHAssetResourceRequestOptions()
-        options.isNetworkAccessAllowed = true
-        
-        var collected = Data()
-        PHAssetResourceManager.default().requestData(for: resource, options: options) { chunk in
-            collected.append(chunk)
-        } completionHandler: { error in
-            if let error {
-                print("PhotoLibraryService full-size thumbnail error: \(error.localizedDescription)")
-                resume(nil)
-                return
-            }
-            
-            guard !collected.isEmpty else {
-                resume(nil)
-                return
-            }
-            
-            guard let image = UIImage(data: collected) else {
-                resume(nil)
-                return
-            }
-            
-            resume(image)
         }
     }
     

@@ -24,7 +24,7 @@ import Foundation
 ///     else if part.kind == "ai_citation", let citation = try? part.decode(Citation.self) { … }
 /// }
 /// ```
-public struct AIMessagePart: Identifiable, Equatable, Sendable {
+public final class AIMessagePart: Identifiable, Equatable, Sendable {
     /// What kind of step a part is. It is an open set: compare against the kinds you know
     /// and give the rest a fallback.
     public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral, CustomStringConvertible {

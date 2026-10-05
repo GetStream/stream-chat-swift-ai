@@ -70,7 +70,7 @@ public final class AIClientToolRunner {
     /// How many times a result is offered to `send` before the runner gives up on it.
     public var maxAttempts = 3
 
-    private struct Call {
+    private final class Call {
         var result: AIClientToolResult?
         var attempts = 0
         var sending = false
@@ -93,13 +93,14 @@ public final class AIClientToolRunner {
     ) {
         for call in parts.compactMap(\.toolCall) where call.isAwaiting(userID: userID, clientID: clientID) {
             guard let tool = tools[call.name] else { continue }
-            var state = calls[call.id] ?? Call()
+            let state = calls[call.id] ?? Call()
             guard !state.sending, !state.sent, state.attempts < maxAttempts else { continue }
             state.sending = true
             calls[call.id] = state
+            let done = state.result
             Task { @MainActor [weak self] in
                 let result: AIClientToolResult
-                if let done = state.result {
+                if let done {
                     result = done
                 } else {
                     result = await tool.run(call)
