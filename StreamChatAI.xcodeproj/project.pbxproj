@@ -7,7 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		841457992EC20FF100D0D034 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = 841457982EC20FF100D0D034 /* MCP */; };
+		84C0DE042F0A000100A1B2C3 /* StreamCore in Frameworks */ = {isa = PBXBuildFile; productRef = 84C0DE022F0A000100A1B2C3 /* StreamCore */; };
+		84C0DE052F0A000100A1B2C3 /* StreamCoreUI in Frameworks */ = {isa = PBXBuildFile; productRef = 84C0DE032F0A000100A1B2C3 /* StreamCoreUI */; };
 		842A1C202CC8E1B5001D93F3 /* StreamChatAI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 842A1C152CC8E1B5001D93F3 /* StreamChatAI.framework */; };
 		842A1C3A2CC8E276001D93F3 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 842A1C392CC8E276001D93F3 /* MarkdownUI */; };
 		842A1C3D2CC8E2C0001D93F3 /* Splash in Frameworks */ = {isa = PBXBuildFile; productRef = 842A1C3C2CC8E2C0001D93F3 /* Splash */; };
@@ -59,9 +60,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				841457992EC20FF100D0D034 /* MCP in Frameworks */,
 				842A1C3A2CC8E276001D93F3 /* MarkdownUI in Frameworks */,
 				842A1C3D2CC8E2C0001D93F3 /* Splash in Frameworks */,
+				84C0DE042F0A000100A1B2C3 /* StreamCore in Frameworks */,
+				84C0DE052F0A000100A1B2C3 /* StreamCoreUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -127,7 +129,8 @@
 			packageProductDependencies = (
 				842A1C392CC8E276001D93F3 /* MarkdownUI */,
 				842A1C3C2CC8E2C0001D93F3 /* Splash */,
-				841457982EC20FF100D0D034 /* MCP */,
+				84C0DE022F0A000100A1B2C3 /* StreamCore */,
+				84C0DE032F0A000100A1B2C3 /* StreamCoreUI */,
 			);
 			productName = StreamChatAI;
 			productReference = 842A1C152CC8E1B5001D93F3 /* StreamChatAI.framework */;
@@ -187,7 +190,7 @@
 			packageReferences = (
 				842A1C382CC8E276001D93F3 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 				842A1C3B2CC8E2C0001D93F3 /* XCRemoteSwiftPackageReference "Splash" */,
-				841457972EC20FF100D0D034 /* XCRemoteSwiftPackageReference "swift-sdk" */,
+				84C0DE012F0A000100A1B2C3 /* XCRemoteSwiftPackageReference "stream-core-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 842A1C162CC8E1B5001D93F3 /* Products */;
@@ -258,7 +261,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -272,7 +275,8 @@
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INSTALL_OBJC_HEADER = NO;
-				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -292,7 +296,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -306,7 +310,8 @@
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INSTALL_OBJC_HEADER = NO;
-				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -364,7 +369,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -424,7 +429,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -446,7 +451,9 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = io.getstream.StreamChatAITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -462,7 +469,9 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = io.getstream.StreamChatAITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -501,12 +510,12 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		841457972EC20FF100D0D034 /* XCRemoteSwiftPackageReference "swift-sdk" */ = {
+		84C0DE012F0A000100A1B2C3 /* XCRemoteSwiftPackageReference "stream-core-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/modelcontextprotocol/swift-sdk";
+			repositoryURL = "https://github.com/GetStream/stream-core-swift.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.12.0;
+				minimumVersion = 0.11.0;
 			};
 		};
 		842A1C382CC8E276001D93F3 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
@@ -528,11 +537,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		841457982EC20FF100D0D034 /* MCP */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 841457972EC20FF100D0D034 /* XCRemoteSwiftPackageReference "swift-sdk" */;
-			productName = MCP;
-		};
 		842A1C392CC8E276001D93F3 /* MarkdownUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 842A1C382CC8E276001D93F3 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
@@ -542,6 +546,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 842A1C3B2CC8E2C0001D93F3 /* XCRemoteSwiftPackageReference "Splash" */;
 			productName = Splash;
+		};
+		84C0DE022F0A000100A1B2C3 /* StreamCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 84C0DE012F0A000100A1B2C3 /* XCRemoteSwiftPackageReference "stream-core-swift" */;
+			productName = StreamCore;
+		};
+		84C0DE032F0A000100A1B2C3 /* StreamCoreUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 84C0DE012F0A000100A1B2C3 /* XCRemoteSwiftPackageReference "stream-core-swift" */;
+			productName = StreamCoreUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

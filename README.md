@@ -6,7 +6,7 @@ This official repository for Stream Chat's UI components is designed specificall
 
 To start, this library includes the following components which assist with this task:
 - `StreamingMessageView` - a component that is able to render text, markdown and code in real-time, using character-by-character animation, similar to ChatGPT.
-- `ComposerView` - a fully featured prompt composer with attachments, suggestion chips and speech input.
+- `AIComposerView` - a fully featured prompt composer with attachments, suggestion chips and speech input.
 - `SpeechToTextButton` - a reusable button that records voice input and streams the recognized transcript back into your UI.
 - `AITypingIndicatorView` - a component that can display different states of the LLM (thinking, checking external sources, etc).
 - `StreamingReasoningView` - a component that streams a model's reasoning into view while it thinks, then folds it into "Thought for 12s", staying responsive with long, fast-growing reasoning.
@@ -22,15 +22,15 @@ Our team plans to keep iterating and adding more components over time. If there'
 The AI components are available via the Swift Package Manager (SPM). Use the following steps to add the SDK via SPM in Xcode:
 - Select "Add Packages…" in File menu
 - Paste the URL https://github.com/GetStream/stream-chat-swift-ai.git
-- In the option "Dependency Rule" choose "Up to next major version", and in the text inputs next to it, enter "0.4.0" and "1.0.0" accordingly.
+- In the option "Dependency Rule" choose "Up to next major version", and in the text inputs next to it, enter "0.13.0" and "1.0.0" accordingly.
 
 You can also add the components in your package file as a dependency:
 
 ```swift
-.package(url: "https://github.com/GetStream/stream-chat-swift-ai.git", from: "0.4.0")
+.package(url: "https://github.com/GetStream/stream-chat-swift-ai.git", from: "0.13.0")
 ```
 
-The components depend on John Sundell's [Splash](https://github.com/JohnSundell/Splash), as well as Guille Gonzalez's [Swift Markdown UI](https://github.com/gonzalezreal/swift-markdown-ui).
+The components require iOS 15 or later, and Xcode 16 or later. They depend on [StreamCore](https://github.com/GetStream/stream-core-swift), shared by Stream's SDKs, John Sundell's [Splash](https://github.com/JohnSundell/Splash), and Guille Gonzalez's [Swift Markdown UI](https://github.com/gonzalezreal/swift-markdown-ui). They don't depend on the Model Context Protocol SDK.
 
 ## ⚙️ Usage
 
@@ -73,7 +73,7 @@ StreamingReasoningView(
 
 Reasoning can run to tens of kilobytes and grow many times a second, so the view only lays out what changes: it renders one paragraph at a time, lazily, so only the paragraph still being written is laid out again. Blank lines separate paragraphs, and inline Markdown (bold, italics, code, links) is rendered.
 
-You can also pass a `footnote` shown under the finished reasoning, `initiallyExpanded` (open once done), `showsLiveReasoning` (open while thinking, on by default), `maxExpandedHeight` (260 by default), the `font`, and `colors`, whose `reasoning` palette sets the header, text, footnote, shimmer and rule colors.
+You can also pass a `footnote` shown under the finished reasoning, `initiallyExpanded` (open once done), `showsLiveReasoning` (open while thinking, on by default), `maxExpandedHeight` (260 by default) and the `font`. The `reasoning` colors of `AIAppearance` (`reasoningTitle`, `reasoningText`, `reasoningFootnote`, `reasoningShimmer` and `reasoningRule`) set the header, text, footnote, shimmer and rule colors.
 
 ### Message Parts
 
@@ -102,7 +102,7 @@ AIMessagePartsView(parts: parts) { part in
 }
 ```
 
-`AIToolCallView` shows a single tool call. Both views take `colors`, whose `toolCalls` palette sets the title, detail, accent, success and failure colors.
+`AIToolCallView` shows a single tool call. Both views take a `font`, and the `toolCall` colors of `AIAppearance` (`toolCallTitle`, `toolCallDetail`, `toolCallAccent`, `toolCallSuccess` and `toolCallFailure`) set the title, detail, accent, success and failure colors.
 
 ### Client Tools
 
@@ -110,7 +110,12 @@ A tool call with `executor: client` and `status: awaiting_client` asks a person'
 
 ```swift
 final class LocationTool: AIClientTool {
-    let name = "get_location"
+    let definition = AIClientToolDefinition(
+        name: "get_location",
+        description: "Gets the person's approximate location.",
+        inputSchema: ["type": "object", "properties": [:]]
+    )
+
     func run(_ call: AIToolCallPart) async -> AIClientToolResult {
         // Ask the person first, then:
         .completed(["city": "Amsterdam"], summary: "Shared approximate location")
@@ -119,11 +124,16 @@ final class LocationTool: AIClientTool {
 
 let runner = AIClientToolRunner(userID: currentUserID, clientID: AIClientIdentity.installID, tools: [LocationTool()])
 
+// Tell the agent which tools this device runs:
+try await backend.register(runner.registrations)
+
 // Whenever a reply's parts change:
 runner.run(parts) { call, result in
     try await backend.send(result, for: call)
 }
 ```
+
+`AIClientToolDefinition` reads and writes the same JSON as a Model Context Protocol tool (`name`, `description` and `inputSchema`), so a tool defined with the MCP SDK converts without this SDK depending on it: `try AIClientToolDefinition(encoding: mcpTool)`. A tool can also give the agent `instructions`, and set `showExternalSourcesIndicator`.
 
 The runner runs a call only when it awaits this person and this install, and only once. A result that could not be sent is sent again on a later update, without running the tool again. Your backend should still accept a result only from the targeted person and install, only while the call is waiting, and only once. Arguments and summaries are visible to every channel member, so keep private data out of them: a summary like "Shared approximate location" rather than the coordinates.
 
@@ -161,7 +171,7 @@ AIToolApprovalView(call: call, approver: approver) { approval, state, decide in
 }
 ```
 
-`AIToolApprovalCard` is the default design, and `colors.toolApprovals` sets its title, message, background, border, button and failure colors.
+`AIToolApprovalCard` is the default design, and the `toolApproval` colors of `AIAppearance` (`toolApprovalTitle`, `toolApprovalMessage`, `toolApprovalBackground`, `toolApprovalBorder`, `toolApprovalAccent` and `toolApprovalFailure`) set its title, message, background, border, button and failure colors.
 
 ### Local Models
 
@@ -184,19 +194,19 @@ It is a small model with a context of a few thousand tokens, so the oldest turns
 
 ### Composer View
 
-The `ComposerView` gives users a modern text-entry surface with attachment previews, suggestion chips, and an integrated send button. Inject a `ComposerViewModel` to handle state and pass a closure that receives every `MessageData` payload when the user taps send.
+The `AIComposerView` gives users a modern text-entry surface with attachment previews, suggestion chips, and an integrated send button. Inject an `AIComposerViewModel` to handle state and pass a closure that receives every `MessageData` payload when the user taps send. It requires iOS 16 or later.
 
 ```swift
-@available(iOS 16, *)
-ComposerView(
-    viewModel: ComposerViewModel(),
-    colors: colors
-) { message in
+@StateObject private var composerViewModel = AIComposerViewModel()
+
+AIComposerView(viewModel: composerViewModel) { message in
     print(message.text, message.attachments)
+} onStopGenerating: {
+    stopGenerating()
 }
 ```
 
-The view also exposes chat option chips via `chatOptions` on the view model and automatically resets attachments once a message is sent.
+While the agent answers, set `isGenerating` on the view model: the composer then shows a stop button in place of the send button, which calls `onStopGenerating`. The view also exposes chat option chips via `chatOptions` on the view model and automatically resets attachments once a message is sent.
 
 ### Speech to Text Button
 
@@ -204,37 +214,36 @@ The view also exposes chat option chips via `chatOptions` on the view model and 
 
 ```swift
 SpeechToTextButton(
-    locale: Locale(identifier: "en-US"),
-    colors: colors
+    locale: Locale(identifier: "en-US")
 ) { transcript in
     print("User said:", transcript)
 }
 ```
 
-Display it alongside `ComposerView` to let users dictate prompts when their hands are busy.
+Display it alongside `AIComposerView` to let users dictate prompts when their hands are busy.
 
 These components are designed to work seamlessly with our existing Swift UI [Chat SDK](https://getstream.io/tutorials/ios-chat/). Our [developer guide](https://getstream.io/chat/solutions/ai-integration/) explains how to get started building AI integrations with Stream and Swift UI. 
 
 ### Customizing the Composer with View Factory
 
-`ComposerView` accepts a `viewFactory` parameter of any type that conforms to `ComposerViewFactory`. The protocol exposes five independent slots you can override individually — everything else falls back to the built-in default:
+`AIComposerView` accepts a `viewFactory` parameter of any type that conforms to `AIComposerViewFactory`. The protocol exposes five independent slots you can override individually — everything else falls back to the built-in default:
 
 | Slot | Factory method | Default |
 |------|----------------|---------|
 | Left of the text field | `makeLeadingComposerView(options:)` | `AddAttachmentsButton` |
-| The text field area | `makeComposerInputView(options:)` | `ComposerInputView` |
+| The text field area | `makeComposerInputView(options:)` | `AIComposerInputView` |
 | Inside the text field, while it is empty | `makeComposerInputTrailingView(options:)` | `SpeechToTextButton` |
 | Right of the text field | `makeTrailingComposerView(options:)` | `EmptyView` |
 | Attachment picker sheet | `makeComposerPickerView(options:)` | Built-in photo/camera picker |
 
 #### Replacing a single slot
 
-Create a class that conforms to `ComposerViewFactory` and override only the method you need. Unoverridden methods keep their defaults automatically.
+Create a class that conforms to `AIComposerViewFactory` and override only the method you need. Unoverridden methods keep their defaults automatically.
 
 ```swift
-class MyComposerFactory: ComposerViewFactory {
+class MyComposerFactory: AIComposerViewFactory {
     // Replace the leading button with a paperclip icon.
-    func makeLeadingComposerView(options: LeadingComposerViewOptions) -> some View {
+    func makeLeadingComposerView(options: AIComposerLeadingViewOptions) -> some View {
         Button {
             options.onTap()
         } label: {
@@ -246,24 +255,24 @@ class MyComposerFactory: ComposerViewFactory {
 }
 ```
 
-Then pass the factory to `ComposerView`:
+Then pass the factory to `AIComposerView`:
 
 ```swift
-ComposerView(viewFactory: MyComposerFactory()) { message in
+AIComposerView(viewFactory: MyComposerFactory()) { message in
     send(message)
 }
 ```
 
 #### Replacing the input area
 
-Override `makeComposerInputView(options:)` to take full control of the text field, send button, and everything in between. The `ComposerInputViewOptions` struct gives you access to the view model, the color palette, the generating state, and the send/stop callbacks:
+Override `makeComposerInputView(options:)` to take full control of the text field, send button, and everything in between. The `AIComposerInputViewOptions` struct gives you access to the view model (which also holds the generating state), the speech handler, and the send/stop callbacks:
 
 ```swift
-class MyComposerFactory: ComposerViewFactory {
-    func makeComposerInputView(options: ComposerInputViewOptions) -> some View {
+class MyComposerFactory: AIComposerViewFactory {
+    func makeComposerInputView(options: AIComposerInputViewOptions) -> some View {
         MyCustomInputView(
             viewModel: options.viewModel,
-            isGenerating: options.isGenerating,
+            isGenerating: options.viewModel.isGenerating,
             onSend: options.onMessageSend,
             onStop: options.onStopGenerating
         )
@@ -273,11 +282,11 @@ class MyComposerFactory: ComposerViewFactory {
 
 #### Replacing the dictation button
 
-While the text field is empty, `ComposerInputView` shows a `SpeechToTextButton` inside it; once there is text, the send button takes its place. Override `makeComposerInputTrailingView(options:)` to show something else there, or return `EmptyView` to leave dictation out:
+While the text field is empty, `AIComposerInputView` shows a `SpeechToTextButton` inside it; once there is text, the send button takes its place. Override `makeComposerInputTrailingView(options:)` to show something else there, or return `EmptyView` to leave dictation out:
 
 ```swift
-class MyComposerFactory: ComposerViewFactory {
-    func makeComposerInputTrailingView(options: ComposerInputTrailingViewOptions) -> some View {
+class MyComposerFactory: AIComposerViewFactory {
+    func makeComposerInputTrailingView(options: AIComposerInputTrailingViewOptions) -> some View {
         EmptyView()
     }
 }
@@ -288,8 +297,8 @@ class MyComposerFactory: ComposerViewFactory {
 The trailing slot is empty by default. Override `makeTrailingComposerView(options:)` to add a mode toggle, a slash-command trigger, or any other control:
 
 ```swift
-class MyComposerFactory: ComposerViewFactory {
-    func makeTrailingComposerView(options: TrailingComposerViewOptions) -> some View {
+class MyComposerFactory: AIComposerViewFactory {
+    func makeTrailingComposerView(options: AIComposerTrailingViewOptions) -> some View {
         Button {
             toggleMode()
         } label: {
@@ -301,41 +310,41 @@ class MyComposerFactory: ComposerViewFactory {
 
 #### Programmatic focus
 
-`ComposerInputView` observes `ComposerViewModel.isTextFieldFocused`. Set it to `true` to show the keyboard and `false` to dismiss it from anywhere that holds a reference to the view model:
+`AIComposerInputView` observes `AIComposerViewModel.isTextFieldFocused`. Set it to `true` to show the keyboard and `false` to dismiss it from anywhere that holds a reference to the view model:
 
 ```swift
-@StateObject private var composerViewModel = ComposerViewModel()
+@StateObject private var composerViewModel = AIComposerViewModel()
 
 // Focus the keyboard when the screen appears.
 composerViewModel.isTextFieldFocused = true
 ```
 
-### Customizing Colors
+### Customizing the Appearance
 
-The `Colors` class centralizes the palette that the AI components use. Create a single instance and inject it into the views you render to keep them in sync:
+The components are styled with `AIAppearance`: its `colors`, `fonts` and `images`. They build on the `DesignSystemTokens` of [StreamCore](https://github.com/GetStream/stream-core-swift), shared by Stream's SDKs, so pass the same tokens to the Chat and Video appearances and the AI components reskin together with them. Set the appearance once, before the components are shown:
 
 ```swift
-let colors = Colors(
-    composer: .init(
-        attachmentButtonIcon: .pink,
-        selectedOptionForeground: .purple
-    ),
-    suggestions: .init(background: .mint.opacity(0.3)),
-    transcription: .init(icon: .orange)
-)
+let tokens = DesignSystemTokens()
+tokens.colors.accentPrimary = .systemPurple
 
-ComposerView(colors: colors) { message in
-    // Handle message
-}
+let appearance = AIAppearance(tokens: tokens)
+appearance.colors.composerAttachmentButtonIcon = .systemPink
+appearance.colors.suggestionBackground = .systemMint
+appearance.fonts.suggestion = .footnote
+appearance.images.composerSend = Image(systemName: "paperplane.fill")
 
-SuggestionsView(
-    suggestions: ["What are the docs for the AI SDK?"],
-    colors: colors,
-    onMessageSend: handleSuggestion
-)
+InjectedValues[\.aiAppearance] = appearance
+```
 
-SpeechToTextButton(colors: colors) { transcript in
-    print(transcript)
+The colors and fonts are derived from the tokens when first read, so change the tokens before that. Paddings and corner radii come from the tokens' layout.
+
+To change or translate the components' texts, replace `AIAppearance.localizationProvider`, which returns the text for a key of the components' strings table. For example, to read them from your app's `AIComponents.strings`, and keep the SDK's text for keys it doesn't have:
+
+```swift
+let sdkTexts = AIAppearance.localizationProvider
+AIAppearance.localizationProvider = { key, table in
+    let text = Bundle.main.localizedString(forKey: key, value: nil, table: "AIComponents")
+    return text != key ? text : sdkTexts(key, table)
 }
 ```
 

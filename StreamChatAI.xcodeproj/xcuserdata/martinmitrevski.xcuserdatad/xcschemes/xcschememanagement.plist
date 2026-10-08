@@ -7,7 +7,25 @@
 		<key>StreamChatAI.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
-			<integer>0</integer>
+			<integer>2</integer>
+		</dict>
+		<key>StreamChatAITests.xcscheme</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>1</integer>
+		</dict>
+	</dict>
+	<key>SuppressBuildableAutocreation</key>
+	<dict>
+		<key>842A1C142CC8E1B5001D93F3</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>842A1C1E2CC8E1B5001D93F3</key>
+		<dict>
+			<key>primary</key>
+			<true/>
 		</dict>
 	</dict>
 </dict>

@@ -1,4 +1,4 @@
-// swift-tools-version:5.9
+// swift-tools-version:6.0
 
 import Foundation
 import PackageDescription
@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "StreamChatAI",
     defaultLocalization: "en",
-    platforms: [.iOS(.v16)],
+    platforms: [.iOS(.v15)],
     products: [
         .library(
             name: "StreamChatAI",
@@ -14,16 +14,17 @@ let package = Package(
         )
     ],
     dependencies: [
+        .package(url: "https://github.com/GetStream/stream-core-swift.git", from: "0.11.0"),
         .package(url: "https://github.com/JohnSundell/Splash.git", exact: "0.16.0"),
-        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui.git", exact: "2.4.0"),
-        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.0")
+        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui.git", exact: "2.4.0")
     ],
     targets: [
         .target(
             name: "StreamChatAI",
             dependencies: [
+                .product(name: "StreamCore", package: "stream-core-swift"),
+                .product(name: "StreamCoreUI", package: "stream-core-swift"),
                 .product(name: "Splash", package: "Splash"),
-                .product(name: "MCP", package: "swift-sdk"),
                 .product(name: "MarkdownUI", package: "swift-markdown-ui")
             ],
             resources: [
